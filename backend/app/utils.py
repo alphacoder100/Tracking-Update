@@ -1,0 +1,246 @@
+"""
+Image and video utility functions.
+"""
+
+import asyncio
+import base64
+import logging
+import os
+import tempfile
+from typing import List, Optional
+
+import cv2
+import numpy as np
+from fastapi import UploadFile
+from starlette.concurrency import run_in_threadpool
+
+from app.config import settings
+
+logger = logging.getLogger(__name__)
+
+VIDEO_SUFFIXES = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v"}
+
+# ── Inference concurrency gate ───────────────────────────────
+# Each heavy inference call (YOLO/ArcFace/OSNet) uses every CPU core, so letting
+# several run concurrently from the threadpool makes them all slower. This
+# semaphore serializes (or bounds) inference across all requests/tasks.
+_inference_semaphore: Optional[asyncio.Semaphore] = None
+
+
+def _get_inference_semaphore() -> asyncio.Semaphore:
+    global _inference_semaphore
+    if _inference_semaphore is None:
+        _inference_semaphore = asyncio.Semaphore(max(1, settings.INFERENCE_MAX_CONCURRENCY))
+    return _inference_semaphore
+
+
+async def run_inference(func, /, *args, **kwargs):
+    """Run a CPU-heavy inference function off the event loop, bounded by the
+    global inference semaphore so concurrent work doesn't thrash the CPU."""
+    async with _get_inference_semaphore():
+        return await run_in_threadpool(func, *args, **kwargs)
+
+
+def cap_frame_long_side(image: np.ndarray, max_side: Optional[int] = None) -> np.ndarray:
+    """Downscale a frame so its longest side is at most `max_side` pixels."""
+    if max_side is None:
+        max_side = settings.MAX_FRAME_LONG_SIDE
+    if max_side <= 0:
+        return image
+    h, w = image.shape[:2]
+    long_side = max(h, w)
+    if long_side <= max_side:
+        return image
+    scale = max_side / long_side
+    return cv2.resize(
+        image, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA
+    )
+
+
+async def file_to_cv_image(upload_file: UploadFile) -> np.ndarray:
+    """Convert a FastAPI UploadFile to an OpenCV BGR image."""
+    contents = await upload_file.read()
+    nparr = np.frombuffer(contents, np.uint8)
+    image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    if image is None:
+        raise ValueError(f"Could not decode image from file: {upload_file.filename}")
+    return image
+
+
+def _extract_video_frames_from_path(video_path: str, fps: Optional[int] = None) -> List[np.ndarray]:
+    """Extract frames from a video file at the configured sampling FPS."""
+    if fps is None:
+        fps = settings.FRAMES_PER_SECOND
+
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        raise ValueError("Could not open video file")
+
+    frames: List[np.ndarray] = []
+    try:
+        video_fps = cap.get(cv2.CAP_PROP_FPS)
+        if video_fps <= 0:
+            video_fps = 30.0
+
+        total_frames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+        if total_frames > 0:
+            duration_seconds = total_frames / video_fps
+            if duration_seconds > settings.VIDEO_MAX_DURATION_SECONDS:
+                raise ValueError(
+                    f"Video duration {duration_seconds:.1f}s exceeds the "
+                    f"{settings.VIDEO_MAX_DURATION_SECONDS}s limit."
+                )
+
+        frame_interval = max(1, int(video_fps / fps))
+        frame_count = 0
+        # grab() advances without decoding; retrieve via read() only kept frames.
+        while True:
+            if frame_count % frame_interval == 0:
+                ret, frame = cap.read()
+                if not ret:
+                    break
+                frames.append(cap_frame_long_side(frame))
+            else:
+                if not cap.grab():
+                    break
+            frame_count += 1
+    finally:
+        cap.release()
+    return frames
+
+
+async def extract_video_frames(video_file: UploadFile, fps: Optional[int] = None) -> List[np.ndarray]:
+    """Extract frames from an uploaded video file at the configured FPS rate."""
+    contents = await video_file.read()
+    tmp_path = None
+    try:
+        suffix = os.path.splitext(video_file.filename or "")[1].lower()
+        if suffix not in VIDEO_SUFFIXES:
+            suffix = ".mp4"
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+            tmp.write(contents)
+            tmp_path = tmp.name
+        return await asyncio.to_thread(_extract_video_frames_from_path, tmp_path, fps)
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+
+def is_video_upload(filename: Optional[str], content_type: Optional[str]) -> bool:
+    """True when an uploaded file looks like a video (by content-type or extension)."""
+    ctype = (content_type or "").split(";", 1)[0].strip().lower()
+    if ctype.startswith("video/"):
+        return True
+    suffix = os.path.splitext(filename or "")[1].lower()
+    return suffix in VIDEO_SUFFIXES
+
+
+def compute_dhash(image: np.ndarray, hash_size: int = 8) -> int:
+    """
+    Difference hash (dHash): a perceptual fingerprint robust to compression
+    noise and tiny lighting shifts. hash_size=8 → 64-bit, hash_size=16 → 256-bit.
+    """
+    if image.ndim == 3:
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = image
+    resized = cv2.resize(gray, (hash_size + 1, hash_size), interpolation=cv2.INTER_AREA)
+    diff = resized[:, 1:] > resized[:, :-1]
+    return int.from_bytes(np.packbits(diff).tobytes(), byteorder="big")
+
+
+def frame_signature(frame: np.ndarray, size: int = 32) -> np.ndarray:
+    """Cheap perceptual fingerprint of a frame (small grayscale thumbnail)."""
+    small = cv2.resize(frame, (size, size), interpolation=cv2.INTER_AREA)
+    gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
+    return gray.astype(np.float32)
+
+
+def frames_are_similar(
+    sig_a: Optional[np.ndarray],
+    sig_b: Optional[np.ndarray],
+    threshold: float,
+) -> bool:
+    """True if two frame signatures differ by less than `threshold` (mean abs diff)."""
+    if sig_a is None or sig_b is None:
+        return False
+    return float(np.mean(np.abs(sig_a - sig_b))) < threshold
+
+
+def cv_image_to_base64(image: np.ndarray, fmt: str = ".jpg", quality: int = 85) -> str:
+    """Encode an OpenCV BGR image to a base64 string."""
+    params = [int(cv2.IMWRITE_JPEG_QUALITY), int(quality)] if fmt in (".jpg", ".jpeg") else []
+    success, buffer = cv2.imencode(fmt, image, params)
+    if not success:
+        raise ValueError("Failed to encode image")
+    return base64.b64encode(buffer).decode("utf-8")
+
+
+def encode_jpeg(image: np.ndarray, quality: int = 85) -> bytes:
+    """Encode an OpenCV BGR image to raw JPEG bytes (for snapshot endpoints)."""
+    success, buffer = cv2.imencode(
+        ".jpg", image, [int(cv2.IMWRITE_JPEG_QUALITY), int(quality)]
+    )
+    if not success:
+        raise ValueError("Failed to encode image")
+    return buffer.tobytes()
+
+
+def normalize_embedding(embedding: np.ndarray) -> List[float]:
+    """L2-normalize an embedding vector and convert to a Python list."""
+    arr = np.asarray(embedding, dtype=np.float32)
+    norm = np.linalg.norm(arr)
+    if norm == 0:
+        return arr.tolist()
+    return (arr / norm).tolist()
+
+
+# Status → BGR colour for annotated detection boxes.
+_DETECTION_COLORS = {
+    "new": (0, 200, 0),        # green  — newly registered
+    "returning": (255, 160, 0),  # blue-ish — recognised returning visitor
+    "ambiguous": (0, 200, 200),  # yellow — skipped
+    "none": (128, 128, 128),     # grey
+}
+
+
+def draw_detections(image: np.ndarray, annotations: list) -> np.ndarray:
+    """
+    Draw labelled bounding boxes for the live feed.
+
+    annotations: list of {bbox: {x1,y1,x2,y2}, label: str, status: str}.
+    """
+    annotated = image.copy()
+    img_h, img_w = annotated.shape[:2]
+    font_scale = max(0.5, img_w / 1400.0)
+    thickness = max(1, int(font_scale * 2))
+
+    for ann in annotations:
+        bbox = ann.get("bbox") or {}
+        x1, y1 = int(bbox.get("x1", 0)), int(bbox.get("y1", 0))
+        x2, y2 = int(bbox.get("x2", 0)), int(bbox.get("y2", 0))
+        status = ann.get("status", "none")
+        label = ann.get("label", "")
+        color = _DETECTION_COLORS.get(status, (200, 200, 0))
+
+        cv2.rectangle(annotated, (x1, y1), (x2, y2), color, max(2, thickness))
+        if not label:
+            continue
+
+        size, base = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)
+        pad = int(6 * font_scale)
+        y_text = max(y1, size[1] + pad + 5)
+        cv2.rectangle(
+            annotated,
+            (x1, y_text - size[1] - pad),
+            (x1 + size[0] + pad * 2, y_text + base + pad),
+            color, -1,
+        )
+        b, g, r = color
+        lum = 0.299 * r + 0.587 * g + 0.114 * b
+        text_color = (0, 0, 0) if lum > 128 else (255, 255, 255)
+        cv2.putText(
+            annotated, label, (x1 + pad, y_text),
+            cv2.FONT_HERSHEY_SIMPLEX, font_scale, text_color, thickness, cv2.LINE_AA,
+        )
+    return annotated

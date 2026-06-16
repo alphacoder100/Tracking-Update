@@ -1,0 +1,230 @@
+{
+  "D:\\Person-Tracking\\init-db.sql": {
+    "mtime": 1781588554.7468097,
+    "hash": "245ea903d3f097290adab3cf39c62056"
+  },
+  "D:\\Person-Tracking\\backend\\alembic\\env.py": {
+    "mtime": 1781592339.7842054,
+    "hash": "5aba9cad96bb3c645fa1e3692a0227a5"
+  },
+  "D:\\Person-Tracking\\backend\\alembic\\versions\\001_restaurant_schema.py": {
+    "mtime": 1781592369.8397374,
+    "hash": "c2c0614381e9dd4ca198bbc5b8e6c7ac"
+  },
+  "D:\\Person-Tracking\\backend\\app\\config.py": {
+    "mtime": 1781594895.5629241,
+    "hash": "5aa21922629cbb520fb97c352503d725"
+  },
+  "D:\\Person-Tracking\\backend\\app\\cv_pipeline.py": {
+    "mtime": 1781591892.9216497,
+    "hash": "00abcd9fa39c3414026b24ed741e2283"
+  },
+  "D:\\Person-Tracking\\backend\\app\\database.py": {
+    "mtime": 1781588554.4681768,
+    "hash": "6ebabb618f37a3fd6e43eae1d101cc4b"
+  },
+  "D:\\Person-Tracking\\backend\\app\\main.py": {
+    "mtime": 1781593791.5458806,
+    "hash": "9defcb174ad85281d410ae9193c03c83"
+  },
+  "D:\\Person-Tracking\\backend\\app\\ml_models.py": {
+    "mtime": 1781591855.7349305,
+    "hash": "48edaf87c61b055b9f821ce80cb70c14"
+  },
+  "D:\\Person-Tracking\\backend\\app\\models.py": {
+    "mtime": 1781591786.5183966,
+    "hash": "4f5a271bd050bb7175052c28015139f3"
+  },
+  "D:\\Person-Tracking\\backend\\app\\osnet.py": {
+    "mtime": 1781588554.5100658,
+    "hash": "ac9b762c55531a66d01cc7ec281a9f75"
+  },
+  "D:\\Person-Tracking\\backend\\app\\schemas.py": {
+    "mtime": 1781593760.2264104,
+    "hash": "8ae0a41b64ffc88a658b3c4fe8df51f5"
+  },
+  "D:\\Person-Tracking\\backend\\app\\utils.py": {
+    "mtime": 1781591940.316596,
+    "hash": "70132b022afe45198dbc9f7bdface945"
+  },
+  "D:\\Person-Tracking\\backend\\app\\__init__.py": {
+    "mtime": 1781588554.374303,
+    "hash": "5a7d95df0412ca36f401980bdeb88ac9"
+  },
+  "D:\\Person-Tracking\\backend\\app\\api\\activity.py": {
+    "mtime": 1781593775.0743823,
+    "hash": "9283393f3c89de88de1a9e0ef482eb7c"
+  },
+  "D:\\Person-Tracking\\backend\\app\\api\\admin.py": {
+    "mtime": 1781592261.5009563,
+    "hash": "b26e91f337577832c4966980cde0c66d"
+  },
+  "D:\\Person-Tracking\\backend\\app\\api\\analytics.py": {
+    "mtime": 1781592233.8746338,
+    "hash": "76796b00f04366df02a1f98e42cd3590"
+  },
+  "D:\\Person-Tracking\\backend\\app\\api\\camera.py": {
+    "mtime": 1781592242.592033,
+    "hash": "69d17684fa7e50c75f71dc552acc2f12"
+  },
+  "D:\\Person-Tracking\\backend\\app\\api\\detect.py": {
+    "mtime": 1781592647.23512,
+    "hash": "c60e955d6b7a0e898234e375e3e3a572"
+  },
+  "D:\\Person-Tracking\\backend\\app\\api\\settings.py": {
+    "mtime": 1781593784.5878904,
+    "hash": "cdcc2ff11132be07bcbdab18914e8131"
+  },
+  "D:\\Person-Tracking\\backend\\app\\api\\visitors.py": {
+    "mtime": 1781594131.7721193,
+    "hash": "22db1929369ed020ba3be040baa90947"
+  },
+  "D:\\Person-Tracking\\backend\\app\\api\\websocket.py": {
+    "mtime": 1781592275.7052436,
+    "hash": "a39cf431b1752a5cc80b51f3b03d956e"
+  },
+  "D:\\Person-Tracking\\backend\\app\\api\\__init__.py": {
+    "mtime": 1781592178.6008766,
+    "hash": "32e4f707fc0aeac22ca73de991d5a127"
+  },
+  "D:\\Person-Tracking\\backend\\app\\services\\analytics_service.py": {
+    "mtime": 1781592559.490673,
+    "hash": "792c914f952811f8d25db2a00dc5e64d"
+  },
+  "D:\\Person-Tracking\\backend\\app\\services\\auto_enroller.py": {
+    "mtime": 1781592008.4392767,
+    "hash": "b740a3798e44a6df47f7d8c9ee922a0e"
+  },
+  "D:\\Person-Tracking\\backend\\app\\services\\camera_service.py": {
+    "mtime": 1781592118.7510598,
+    "hash": "133d531358fdb7d5875b0f08d246d32f"
+  },
+  "D:\\Person-Tracking\\backend\\app\\services\\detection_pipeline.py": {
+    "mtime": 1781592086.9382546,
+    "hash": "09780f0ef1a64c001fb5ef305a4c9947"
+  },
+  "D:\\Person-Tracking\\backend\\app\\services\\identity_resolver.py": {
+    "mtime": 1781591984.267385,
+    "hash": "a87ab1b3f6df87c2c95b414d90ea0e5f"
+  },
+  "D:\\Person-Tracking\\backend\\app\\services\\visit_tracker.py": {
+    "mtime": 1781593580.8415318,
+    "hash": "bffc25ea08b4d4c7ab51318e7d37c8b6"
+  },
+  "D:\\Person-Tracking\\backend\\app\\services\\__init__.py": {
+    "mtime": 1781591954.0411513,
+    "hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "D:\\Person-Tracking\\dashboard\\next-env.d.ts": {
+    "mtime": 1781594515.693921,
+    "hash": "b5ed9dd8b4c5ba8e5ab8e6a379c15838"
+  },
+  "D:\\Person-Tracking\\dashboard\\next.config.js": {
+    "mtime": 1781593855.8018723,
+    "hash": "368f129b1abbe2d82b25351cde2785d9"
+  },
+  "D:\\Person-Tracking\\dashboard\\postcss.config.js": {
+    "mtime": 1781593860.1188395,
+    "hash": "8640f9b2e6475cc3f5b1ff4548925765"
+  },
+  "D:\\Person-Tracking\\dashboard\\tailwind.config.ts": {
+    "mtime": 1781593871.719508,
+    "hash": "4905fdf3045c9eeefb4a9ac55b930867"
+  },
+  "D:\\Person-Tracking\\dashboard\\app\\layout.tsx": {
+    "mtime": 1781594017.2886186,
+    "hash": "fd0c6acce7e443df80bea0f80a7c9ae5"
+  },
+  "D:\\Person-Tracking\\dashboard\\app\\page.tsx": {
+    "mtime": 1781594108.1949122,
+    "hash": "5a9fb8db03adb682ef2c532d1e4fba08"
+  },
+  "D:\\Person-Tracking\\dashboard\\app\\activity\\page.tsx": {
+    "mtime": 1781594253.9482613,
+    "hash": "a0b916deb90851589480edba95736ad7"
+  },
+  "D:\\Person-Tracking\\dashboard\\app\\analytics\\page.tsx": {
+    "mtime": 1781594239.454121,
+    "hash": "92e8403727da85ed46325e665aa4ad8c"
+  },
+  "D:\\Person-Tracking\\dashboard\\app\\api\\backend\\[...path]\\route.ts": {
+    "mtime": 1781593932.2146642,
+    "hash": "5da8a805b848399ed15dbee23ed21711"
+  },
+  "D:\\Person-Tracking\\dashboard\\app\\camera\\page.tsx": {
+    "mtime": 1781594278.4799619,
+    "hash": "fcc895ab5a36f6fcf77dfa9264f55d85"
+  },
+  "D:\\Person-Tracking\\dashboard\\app\\settings\\page.tsx": {
+    "mtime": 1781594295.594736,
+    "hash": "5901ed9b4bd8eba13c1babf17cb93d16"
+  },
+  "D:\\Person-Tracking\\dashboard\\app\\visitors\\page.tsx": {
+    "mtime": 1781594157.7245493,
+    "hash": "166c7c86ed34627ced6c17a89cd21219"
+  },
+  "D:\\Person-Tracking\\dashboard\\app\\visitors\\[id]\\page.tsx": {
+    "mtime": 1781594215.84262,
+    "hash": "d973fbb87ceeb1e44837e1c0016d986f"
+  },
+  "D:\\Person-Tracking\\dashboard\\components\\activity-feed.tsx": {
+    "mtime": 1781594059.5302863,
+    "hash": "93f8405ffce47e0c536eb897af82fea2"
+  },
+  "D:\\Person-Tracking\\dashboard\\components\\charts.tsx": {
+    "mtime": 1781594178.0524938,
+    "hash": "e90b8c13f5e85a016ecfab41025a6b29"
+  },
+  "D:\\Person-Tracking\\dashboard\\components\\live-feed.tsx": {
+    "mtime": 1781594074.8402603,
+    "hash": "c0000d764f5f436b8209a53fb893317f"
+  },
+  "D:\\Person-Tracking\\dashboard\\components\\sidebar.tsx": {
+    "mtime": 1781594010.4148257,
+    "hash": "ebd27aeda16d1aa2a7f42b4c29decf49"
+  },
+  "D:\\Person-Tracking\\dashboard\\components\\stat-card.tsx": {
+    "mtime": 1781593996.1830413,
+    "hash": "bc930da1498dfda472e63922527eb675"
+  },
+  "D:\\Person-Tracking\\dashboard\\components\\ui.tsx": {
+    "mtime": 1781593988.6580782,
+    "hash": "989c0584842e136001fc277aa005c219"
+  },
+  "D:\\Person-Tracking\\dashboard\\components\\visitor-table.tsx": {
+    "mtime": 1781594093.0506573,
+    "hash": "b2a9476c0f597b0abe1922e03d4cc27e"
+  },
+  "D:\\Person-Tracking\\dashboard\\lib\\api.ts": {
+    "mtime": 1781593962.0893214,
+    "hash": "77756392a84a3e42d324bc47eb90fe12"
+  },
+  "D:\\Person-Tracking\\dashboard\\lib\\format.ts": {
+    "mtime": 1781593973.376889,
+    "hash": "032c9dac8fb81c8be28574ae3607deb0"
+  },
+  "D:\\Person-Tracking\\dashboard\\lib\\types.ts": {
+    "mtime": 1781593948.933297,
+    "hash": "d906c2578f958fd70992731c0ceb6df0"
+  },
+  "D:\\Person-Tracking\\docker-compose.yml": {
+    "mtime": 1781594881.0340059,
+    "hash": "908ecbea5dc1ea949d65ef70910ce86b"
+  },
+  "D:\\Person-Tracking\\README.md": {
+    "mtime": 1781594924.2230694,
+    "hash": "f04f2040f9eb5bfdf4b0ca0433f239d3"
+  },
+  "D:\\Person-Tracking\\ULTIMATE_RESTAURANT_TRACKER_PLAN.md": {
+    "mtime": 1781594917.8112729,
+    "hash": "6522e666674e23941f6d8890c5a80969"
+  },
+  "D:\\Person-Tracking\\backend\\requirements.txt": {
+    "mtime": 1781592389.8596375,
+    "hash": "4874715a93e64377a0ac91dbdce69b23"
+  },
+  "D:\\Person-Tracking\\dashboard\\README.md": {
+    "mtime": 1781594941.0862734,
+    "hash": "6f689e841f81b99a494dacb0cc18220a"
+  }
+}

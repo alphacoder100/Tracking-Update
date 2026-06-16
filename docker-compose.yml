@@ -1,0 +1,85 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: tracker_postgres
+    restart: unless-stopped
+    ports:
+      - "3004:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tracker}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tracker_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-restaurant_tracker}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tracker} -d ${POSTGRES_DB:-restaurant_tracker}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: tracker_pgadmin
+    restart: unless-stopped
+    ports:
+      - "3002:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@admin.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+    volumes:
+      - pgadmindata:/var/lib/pgadmin
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: tracker_backend
+    restart: unless-stopped
+    privileged: true
+    ports:
+      # Host 3001 -> container 8000 (uvicorn still listens on 8000 internally).
+      - "3001:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-tracker}:${POSTGRES_PASSWORD:-tracker_pass}@postgres:5432/${POSTGRES_DB:-restaurant_tracker}
+    env_file:
+      - .env
+    volumes:
+      # Live-mount source so code changes are picked up without a rebuild.
+      - ./backend:/app
+    devices:
+      # Pass webcam device to container (works with WSL2/Linux backend)
+      - /dev/video0:/dev/video0
+    # The in-memory visit tracker requires a SINGLE worker. --reload runs one.
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+    container_name: tracker_dashboard
+    restart: unless-stopped
+    ports:
+      - "3003:3003"
+    environment:
+      # Server-side proxy target. Backend runs on host machine (not in Docker)
+      - BACKEND_URL=http://host.docker.internal:8000
+      - API_KEY=${API_KEY:-changeme-set-a-real-key}
+      # WebSocket connection from browser to backend on host machine
+      - NEXT_PUBLIC_WS_URL=ws://localhost:8000/ws/live-feed
+    volumes:
+      - ./dashboard:/app
+      - /app/node_modules
+
+
+volumes:
+  pgdata:
+    driver: local
+  pgadmindata:
+    driver: local

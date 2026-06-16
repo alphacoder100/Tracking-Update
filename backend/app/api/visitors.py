@@ -1,0 +1,212 @@
+"""Visitor CRUD + visit history endpoints."""
+
+import logging
+from datetime import datetime
+from pathlib import Path
+from typing import Optional
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Security
+from fastapi.responses import FileResponse
+from sqlalchemy import String, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api import verify_api_key
+from app.database import get_db
+from app.models import Visit, Visitor
+from app.schemas import (
+    VisitListResponse,
+    VisitorDetailResponse,
+    VisitorListResponse,
+    VisitorSummary,
+    VisitorUpdateRequest,
+    VisitSummary,
+)
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/api/visitors", tags=["visitors"])
+
+
+def _thumbnail_url(visitor: Visitor) -> Optional[str]:
+    return f"/api/visitors/{visitor.id}/thumbnail" if visitor.thumbnail_path else None
+
+
+def _visit_summary(v: Visit) -> VisitSummary:
+    return VisitSummary(
+        id=v.id,
+        entered_at=v.entered_at,
+        left_at=v.left_at,
+        duration_minutes=v.duration_minutes,
+        detection_count=v.detection_count or 0,
+        best_face_confidence=v.best_face_confidence,
+        camera_id=v.camera_id,
+        is_active=v.left_at is None,
+    )
+
+
+@router.get("", response_model=VisitorListResponse)
+async def list_visitors(
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    min_visits: Optional[int] = Query(None, ge=0),
+    since: Optional[datetime] = Query(None),
+    search: Optional[str] = Query(None, description="Match visitor name or id prefix"),
+    sort_by: str = Query("last_seen", pattern="^(last_seen|visit_count|first_seen)$"),
+    include_staff: bool = Query(False),
+    db: AsyncSession = Depends(get_db),
+    _key: str = Security(verify_api_key),
+):
+    """List visitors with filtering, sorting, and pagination."""
+    query = select(Visitor).where(Visitor.is_active.is_(True))
+    if not include_staff:
+        query = query.where(Visitor.is_staff.is_(False))
+    if min_visits is not None:
+        query = query.where(Visitor.visit_count >= min_visits)
+    if since is not None:
+        query = query.where(Visitor.last_seen_at >= since)
+    if search:
+        term = search.strip()
+        query = query.where(
+            Visitor.name.ilike(f"%{term}%")
+            | func.cast(Visitor.id, String).ilike(f"{term}%")
+        )
+
+    total = await db.scalar(select(func.count()).select_from(query.subquery()))
+
+    sort_col = {
+        "last_seen": Visitor.last_seen_at,
+        "visit_count": Visitor.visit_count,
+        "first_seen": Visitor.first_seen_at,
+    }[sort_by]
+    query = query.order_by(sort_col.desc().nullslast()).limit(limit).offset(offset)
+
+    visitors = (await db.execute(query)).scalars().all()
+    return VisitorListResponse(
+        total=total or 0,
+        visitors=[
+            VisitorSummary(
+                id=v.id,
+                name=v.name,
+                visit_count=v.visit_count,
+                first_seen_at=v.first_seen_at,
+                last_seen_at=v.last_seen_at,
+                is_staff=v.is_staff,
+                is_active=v.is_active,
+                best_face_det_score=v.best_face_det_score,
+                thumbnail_url=_thumbnail_url(v),
+            )
+            for v in visitors
+        ],
+    )
+
+
+@router.get("/{visitor_id}", response_model=VisitorDetailResponse)
+async def get_visitor(
+    visitor_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _key: str = Security(verify_api_key),
+):
+    visitor = await db.get(Visitor, visitor_id)
+    if visitor is None or not visitor.is_active:
+        raise HTTPException(status_code=404, detail="Visitor not found.")
+
+    latest = (
+        await db.execute(
+            select(Visit)
+            .where(Visit.visitor_id == visitor_id)
+            .order_by(Visit.entered_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+
+    return VisitorDetailResponse(
+        id=visitor.id,
+        name=visitor.name,
+        notes=visitor.notes,
+        visit_count=visitor.visit_count,
+        first_seen_at=visitor.first_seen_at,
+        last_seen_at=visitor.last_seen_at,
+        is_staff=visitor.is_staff,
+        is_active=visitor.is_active,
+        best_face_det_score=visitor.best_face_det_score,
+        total_faces_recorded=visitor.total_faces_recorded or 0,
+        thumbnail_url=_thumbnail_url(visitor),
+        latest_visit=_visit_summary(latest) if latest else None,
+    )
+
+
+@router.get("/{visitor_id}/visits", response_model=VisitListResponse)
+async def get_visitor_visits(
+    visitor_id: UUID,
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    db: AsyncSession = Depends(get_db),
+    _key: str = Security(verify_api_key),
+):
+    exists = await db.get(Visitor, visitor_id)
+    if exists is None:
+        raise HTTPException(status_code=404, detail="Visitor not found.")
+
+    base = select(Visit).where(Visit.visitor_id == visitor_id)
+    total = await db.scalar(select(func.count()).select_from(base.subquery()))
+    visits = (
+        await db.execute(
+            base.order_by(Visit.entered_at.desc()).limit(limit).offset(offset)
+        )
+    ).scalars().all()
+    return VisitListResponse(
+        total=total or 0, visits=[_visit_summary(v) for v in visits]
+    )
+
+
+@router.put("/{visitor_id}", response_model=VisitorDetailResponse)
+async def update_visitor(
+    visitor_id: UUID,
+    request: VisitorUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+    _key: str = Security(verify_api_key),
+):
+    visitor = await db.get(Visitor, visitor_id)
+    if visitor is None or not visitor.is_active:
+        raise HTTPException(status_code=404, detail="Visitor not found.")
+    if request.name is not None:
+        visitor.name = request.name
+    if request.notes is not None:
+        visitor.notes = request.notes
+    if request.is_staff is not None:
+        visitor.is_staff = request.is_staff
+    await db.commit()
+    return await get_visitor(visitor_id, db, _key)
+
+
+@router.delete("/{visitor_id}")
+async def delete_visitor(
+    visitor_id: UUID,
+    hard: bool = Query(False, description="Permanently delete instead of soft delete"),
+    db: AsyncSession = Depends(get_db),
+    _key: str = Security(verify_api_key),
+):
+    visitor = await db.get(Visitor, visitor_id)
+    if visitor is None:
+        raise HTTPException(status_code=404, detail="Visitor not found.")
+    if hard:
+        await db.delete(visitor)
+    else:
+        visitor.is_active = False
+    await db.commit()
+    return {"success": True, "visitor_id": str(visitor_id), "hard": hard}
+
+
+@router.get("/{visitor_id}/thumbnail")
+async def get_visitor_thumbnail(
+    visitor_id: UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    visitor = await db.get(Visitor, visitor_id)
+    if visitor is None or not visitor.thumbnail_path:
+        raise HTTPException(status_code=404, detail="Thumbnail not found.")
+    path = Path(visitor.thumbnail_path)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Thumbnail file missing.")
+    return FileResponse(str(path), media_type="image/jpeg")
