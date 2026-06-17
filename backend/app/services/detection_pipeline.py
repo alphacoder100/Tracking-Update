@@ -169,6 +169,7 @@ async def process_detections(
                     visitor_id=visitor.id,
                     det_score=det_score,
                     top_similarity=res.face_similarity,
+                    top_match_id=res.top_match_id,
                 )
         elif res.visitor_id is not None:
             pd.visitor_id = res.visitor_id

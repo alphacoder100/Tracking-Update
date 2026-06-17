@@ -137,6 +137,23 @@ export default function ReviewQueuePage() {
                         </span>
                       </div>
                       <p className="text-sm text-text-secondary">{flag.detail}</p>
+                      {flag.matched_visitor_id && (
+                        <p className="text-xs text-text-secondary">
+                          Similar to{" "}
+                          <Link
+                            href={`/visitors/${flag.matched_visitor_id}`}
+                            className="text-primary hover:underline"
+                          >
+                            {flag.matched_visitor_name ||
+                              `visitor ${flag.matched_visitor_id.slice(0, 8)}`}
+                          </Link>
+                          {flag.similarity != null && (
+                            <span className="ml-1 text-text-muted">
+                              · {(flag.similarity * 100).toFixed(1)}% match
+                            </span>
+                          )}
+                        </p>
+                      )}
                       <Link
                         href={`/visitors/${flag.visitor_id}`}
                         className="inline-block text-xs text-primary hover:underline"

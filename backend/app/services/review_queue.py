@@ -36,9 +36,12 @@ async def maybe_flag_new_visitor(
     visitor_id: UUID,
     det_score: float,
     top_similarity: Optional[float],
+    top_match_id: Optional[UUID] = None,
 ) -> None:
     """Call after registering a new visitor. Flags low-quality or near-duplicate."""
     reason: Optional[str] = None
+    matched_visitor_id: Optional[UUID] = None
+    similarity: Optional[float] = None
 
     if det_score < _QUALITY_THRESHOLD:
         reason = f"new_low_quality: det_score={det_score:.3f} < {_QUALITY_THRESHOLD}"
@@ -50,9 +53,19 @@ async def maybe_flag_new_visitor(
             f"probable_duplicate: top_similarity={top_similarity:.3f} near "
             f"threshold={settings.NEW_VISITOR_MAX_SIMILARITY}"
         )
+        # Record WHICH known visitor this duplicate resembled, and how closely.
+        matched_visitor_id = top_match_id
+        similarity = top_similarity
 
     if reason:
-        await _insert_flag(db, visitor_id=visitor_id, flag_type=reason.split(":")[0], detail=reason)
+        await _insert_flag(
+            db,
+            visitor_id=visitor_id,
+            flag_type=reason.split(":")[0],
+            detail=reason,
+            matched_visitor_id=matched_visitor_id,
+            similarity=similarity,
+        )
 
 
 async def flag_ambiguous_visitor(
@@ -79,18 +92,23 @@ async def _insert_flag(
     visitor_id: UUID,
     flag_type: str,
     detail: str,
+    matched_visitor_id: Optional[UUID] = None,
+    similarity: Optional[float] = None,
 ) -> None:
     try:
         await db.execute(
             text("""
-                INSERT INTO review_queue (visitor_id, flag_type, detail, created_at, resolved)
-                VALUES (:vid, :ftype, :detail, :now, FALSE)
+                INSERT INTO review_queue
+                    (visitor_id, flag_type, detail, matched_visitor_id, similarity, created_at, resolved)
+                VALUES (:vid, :ftype, :detail, :mvid, :sim, :now, FALSE)
                 ON CONFLICT DO NOTHING
             """),
             {
                 "vid": str(visitor_id),
                 "ftype": flag_type,
                 "detail": detail,
+                "mvid": str(matched_visitor_id) if matched_visitor_id else None,
+                "sim": similarity,
                 "now": datetime.now(timezone.utc),
             },
         )
@@ -104,10 +122,13 @@ async def get_pending_flags(db: AsyncSession, limit: int = 50) -> list[dict]:
     """Return unresolved flags for the admin UI."""
     try:
         rows = (await db.execute(text("""
-            SELECT id, visitor_id, flag_type, detail, created_at
-            FROM review_queue
-            WHERE resolved = FALSE
-            ORDER BY created_at DESC
+            SELECT rq.id, rq.visitor_id, rq.flag_type, rq.detail,
+                   rq.matched_visitor_id, rq.similarity, rq.created_at,
+                   mv.name AS matched_visitor_name
+            FROM review_queue rq
+            LEFT JOIN visitors mv ON mv.id = rq.matched_visitor_id
+            WHERE rq.resolved = FALSE
+            ORDER BY rq.created_at DESC
             LIMIT :lim
         """), {"lim": limit})).all()
     except Exception:
@@ -119,6 +140,9 @@ async def get_pending_flags(db: AsyncSession, limit: int = 50) -> list[dict]:
             "visitor_id": str(r.visitor_id),
             "flag_type": r.flag_type,
             "detail": r.detail,
+            "matched_visitor_id": str(r.matched_visitor_id) if r.matched_visitor_id else None,
+            "matched_visitor_name": r.matched_visitor_name,
+            "similarity": float(r.similarity) if r.similarity is not None else None,
             "created_at": r.created_at.isoformat() if r.created_at else None,
         }
         for r in rows

@@ -180,6 +180,9 @@ export interface ReviewFlag {
   visitor_id: string;
   flag_type: string;
   detail: string;
+  matched_visitor_id: string | null;
+  matched_visitor_name: string | null;
+  similarity: number | null;
   created_at: string | null;
 }
 

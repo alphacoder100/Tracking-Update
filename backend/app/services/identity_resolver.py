@@ -38,6 +38,9 @@ class ResolutionResult:
     face_similarity: float = 0.0
     body_similarity: float = 0.0
     match_source: str = "none"  # "face" | "body" | "new" | "none"
+    # Best-scoring gallery visitor for this face, even when we DIDN'T match them
+    # (i.e. a new/grey-zone decision). Lets the review queue show "similar to whom".
+    top_match_id: Optional[UUID] = None
 
 
 async def _search_faces_batch(
@@ -161,19 +164,25 @@ def _decide_from_face(
             and (top_sim - runner_up[1]) < settings.AMBIGUITY_MARGIN
         ):
             return ResolutionResult(
-                is_ambiguous=True, face_similarity=top_sim, match_source="none"
+                is_ambiguous=True, face_similarity=top_sim, match_source="none",
+                top_match_id=top_id,
             )
         return ResolutionResult(
             visitor_id=top_id,
             face_similarity=top_sim,
             match_source="face",
+            top_match_id=top_id,
         )
 
     if top_sim <= settings.NEW_VISITOR_MAX_SIMILARITY:
-        return ResolutionResult(is_new=True, face_similarity=top_sim, match_source="new")
+        return ResolutionResult(
+            is_new=True, face_similarity=top_sim, match_source="new",
+            top_match_id=top_id,
+        )
 
     return ResolutionResult(
-        is_new=False, face_similarity=top_sim, match_source="none"
+        is_new=False, face_similarity=top_sim, match_source="none",
+        top_match_id=top_id,
     )
 
 
@@ -213,6 +222,7 @@ async def resolve_batch(
                     face_similarity=res.face_similarity,
                     body_similarity=body[1],
                     match_source="body",
+                    top_match_id=res.top_match_id,
                 )
 
         # Grey zone with no body match → treat as a new visitor only if face
@@ -223,6 +233,7 @@ async def resolve_batch(
                     is_new=True,
                     face_similarity=res.face_similarity,
                     match_source="new",
+                    top_match_id=res.top_match_id,
                 )
 
         results.append(res)
