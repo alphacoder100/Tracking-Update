@@ -205,6 +205,17 @@ export interface DetectionQuality {
 // Runtime-editable admin settings (from GET/PATCH /api/admin/settings).
 export type AdminSettings = Record<string, number | boolean | string>;
 
+// Processing device state (from GET/POST /api/admin/device).
+export interface DeviceStatus {
+  requested: string; // "auto" | "cpu" | "cuda"
+  current_device: string; // "cpu" | "cuda"
+  cuda_available: boolean;
+  gpu_name: string | null;
+  gpu_memory_mb: number | null;
+  gpu_memory_used_mb: number | null;
+  models_loaded: boolean;
+}
+
 export interface VideoStreamResponse {
   status: string;
   filename: string;

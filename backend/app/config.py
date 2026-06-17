@@ -101,7 +101,14 @@ class Settings(BaseSettings):
     # below which two consecutive frames are treated as the same scene.
     FRAME_DEDUP_MAD_THRESHOLD: float = 4.0
 
-    # ── Models (CPU only) ────────────────────────────────────
+    # ── Processing device ────────────────────────────────────
+    # Where inference runs: "auto" (GPU if a CUDA device is available, else CPU),
+    # "cpu" (force CPU), or "cuda" (force GPU; falls back to CPU with a warning if
+    # no CUDA device is present). Switchable at runtime from the dashboard — see
+    # /api/admin/device. GPU requires a CUDA torch build + onnxruntime-gpu.
+    DEVICE: str = "auto"
+
+    # ── Models ───────────────────────────────────────────────
     YOLO_MODEL_PATH: str = "yolov8n.pt"
     # Export YOLO to ONNX once at startup (2-3x faster than PyTorch on CPU).
     YOLO_USE_ONNX: bool = True

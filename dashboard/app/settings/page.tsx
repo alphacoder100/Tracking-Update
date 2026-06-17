@@ -2,10 +2,10 @@
 
 import { useMemo, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
-import { Info, RotateCcw, Save, SlidersHorizontal } from "lucide-react";
+import { Cpu, Info, Loader2, RotateCcw, Save, SlidersHorizontal, Zap } from "lucide-react";
 
 import { api, fetcher } from "@/lib/api";
-import type { AdminSettings } from "@/lib/types";
+import type { AdminSettings, DeviceStatus } from "@/lib/types";
 import {
   Badge,
   Button,
@@ -73,6 +73,125 @@ function prettyLabel(key: string): string {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+const DEVICE_OPTIONS: { value: string; label: string; needsGpu?: boolean }[] = [
+  { value: "cpu", label: "CPU" },
+  { value: "cuda", label: "GPU", needsGpu: true },
+  { value: "auto", label: "Auto" },
+];
+
+function DeviceCard() {
+  const { mutate } = useSWRConfig();
+  const { data, error, isLoading } = useSWR<DeviceStatus>("admin/device", fetcher);
+  const [switching, setSwitching] = useState<string | null>(null);
+
+  async function select(value: string) {
+    if (switching || data?.requested === value) return;
+    setSwitching(value);
+    try {
+      await api.post("admin/device", { device: value });
+      await mutate("admin/device");
+    } catch (e) {
+      alert(`Device switch failed: ${(e as Error).message}`);
+    } finally {
+      setSwitching(null);
+    }
+  }
+
+  if (error) {
+    return (
+      <Card>
+        <CardTitle>Processing Device</CardTitle>
+        <ErrorState message="Could not load device status. Is ADMIN_API_KEY configured?" />
+      </Card>
+    );
+  }
+  if (isLoading || !data) {
+    return <Skeleton className="h-32" />;
+  }
+
+  const onGpu = data.current_device === "cuda";
+  return (
+    <Card>
+      <CardTitle
+        action={
+          <Badge tone={onGpu ? "success" : "neutral"}>
+            {onGpu ? (
+              <>
+                <Zap className="h-3 w-3" /> GPU
+              </>
+            ) : (
+              <>
+                <Cpu className="h-3 w-3" /> CPU
+              </>
+            )}
+          </Badge>
+        }
+      >
+        <span className="flex items-center gap-2">
+          {onGpu ? <Zap className="h-4 w-4" /> : <Cpu className="h-4 w-4" />} Processing
+          Device
+        </span>
+      </CardTitle>
+
+      <p className="mb-3 text-sm text-text-secondary">
+        Choose where detection & recognition run. Switching reloads all models
+        in-process (a few seconds) — no restart needed.
+      </p>
+
+      <div className="flex flex-wrap gap-2">
+        {DEVICE_OPTIONS.map((opt) => {
+          const active = data.requested === opt.value;
+          const disabled =
+            (opt.needsGpu && !data.cuda_available) || switching !== null;
+          return (
+            <Button
+              key={opt.value}
+              variant={active ? "primary" : "ghost"}
+              size="sm"
+              disabled={disabled}
+              onClick={() => select(opt.value)}
+            >
+              {switching === opt.value && <Loader2 className="h-3 w-3 animate-spin" />}
+              {opt.label}
+            </Button>
+          );
+        })}
+        {switching && (
+          <span className="flex items-center gap-1 text-xs text-text-muted">
+            <Loader2 className="h-3 w-3 animate-spin" /> Reloading models…
+          </span>
+        )}
+      </div>
+
+      <div className="mt-3 space-y-1 text-xs text-text-muted">
+        {data.cuda_available ? (
+          <p>
+            GPU detected:{" "}
+            <span className="text-text-secondary">{data.gpu_name ?? "CUDA device"}</span>
+            {data.gpu_memory_mb
+              ? ` · ${(data.gpu_memory_mb / 1024).toFixed(0)} GB`
+              : ""}
+            {onGpu && data.gpu_memory_used_mb != null
+              ? ` · ${data.gpu_memory_used_mb} MB in use`
+              : ""}
+          </p>
+        ) : (
+          <p>
+            No usable GPU in this environment. Install a CUDA torch build +
+            <code className="px-1 text-primary">onnxruntime-gpu</code> to enable the
+            GPU option.
+          </p>
+        )}
+        <p>
+          Active device:{" "}
+          <span className="text-text-secondary">{data.current_device}</span>
+          {data.requested === "auto" ? " (auto)" : ""}
+        </p>
+      </div>
+    </Card>
+  );
+}
+
 export default function SettingsPage() {
   const { mutate } = useSWRConfig();
   const { data, error, isLoading } = useSWR<AdminSettings>("admin/settings", fetcher);
@@ -138,6 +257,8 @@ export default function SettingsPage() {
           <span className="text-text-primary">Detection Quality</span> chart on Analytics.
         </p>
       </div>
+
+      <DeviceCard />
 
       {error ? (
         <ErrorState message="Could not load admin settings. Is ADMIN_API_KEY configured?" />

@@ -10,7 +10,7 @@ import os
 
 # Configure CPU thread usage for all math backends BEFORE numpy/torch/onnxruntime
 # are imported (they read the thread count once at import time). Default: every
-# physical core. Everything runs on CPU — no GPU.
+# physical core. Only affects CPU-mode inference; harmless when running on GPU.
 _cpu_threads = os.environ.get("CPU_THREADS", "").strip()
 if not _cpu_threads or _cpu_threads == "0":
     _cpu_threads = str(os.cpu_count() or 1)
@@ -113,12 +113,29 @@ async def lifespan(app: FastAPI):
     import torch
     cpu_threads = int(os.environ.get("OMP_NUM_THREADS", "1"))
     torch.set_num_threads(cpu_threads)
-    logger.info("PyTorch CPU thread count set to %d (CPU-only).", cpu_threads)
+    logger.info("PyTorch CPU thread count set to %d.", cpu_threads)
 
-    logger.info("Loading ML models (CPU)...")
+    # Honour a device choice persisted from a previous live switch (if any),
+    # otherwise fall back to the configured DEVICE.
+    device = settings.DEVICE
+    try:
+        async with AsyncSessionLocal() as db:
+            row = (
+                await db.execute(
+                    text("SELECT value FROM runtime_settings WHERE key = 'DEVICE'")
+                )
+            ).first()
+            if row and row.value:
+                device = row.value
+                object.__setattr__(settings, "DEVICE", device)
+    except Exception:
+        pass  # runtime_settings table may not exist yet
+
+    logger.info("Loading ML models (requested device: %s)...", device)
     ModelManager.get_instance().load_all(
         yolo_path=settings.YOLO_MODEL_PATH,
         insightface_name=settings.INSIGHTFACE_MODEL_NAME,
+        device=device,
     )
 
     # Recover any visits left open by a previous run.

@@ -1,7 +1,8 @@
 """
 Singleton ML model manager.
 Loads YOLOv8n (person detection), InsightFace/ArcFace (512-d face embeddings),
-and OSNet x0.25 (512-d body re-ID) once on startup. CPU-only — no GPU.
+and OSNet x0.25 (512-d body re-ID) once on startup. Runs on CPU or CUDA GPU;
+the device is chosen at load time and can be switched live via reload().
 """
 
 import logging
@@ -48,6 +49,47 @@ def filter_persons(detections: List[dict], min_conf: float = 0.4) -> List[dict]:
     ]
 
 
+def cuda_available() -> bool:
+    """True when a usable CUDA GPU is visible to torch (CUDA torch build present)."""
+    try:
+        return bool(torch.cuda.is_available() and torch.cuda.device_count() > 0)
+    except Exception:
+        return False
+
+
+def gpu_info() -> dict:
+    """Name + total/used VRAM (MB) for GPU 0, or {} when no CUDA device."""
+    if not cuda_available():
+        return {}
+    try:
+        props = torch.cuda.get_device_properties(0)
+        total_mb = int(props.total_memory / (1024 * 1024))
+        used_mb = int(torch.cuda.memory_allocated(0) / (1024 * 1024))
+        return {"name": props.name, "memory_mb": total_mb, "memory_used_mb": used_mb}
+    except Exception:
+        return {}
+
+
+def resolve_device(requested: str) -> str:
+    """
+    Map a requested device ("auto" | "cpu" | "cuda"/"gpu") to a concrete device
+    string, honouring actual hardware availability.
+
+    - "auto": "cuda" if a CUDA GPU is available, else "cpu".
+    - "cuda"/"gpu": "cuda" if available, else "cpu" (logs a warning).
+    - anything else: "cpu".
+    """
+    req = (requested or "auto").strip().lower()
+    if req == "auto":
+        return "cuda" if cuda_available() else "cpu"
+    if req in ("cuda", "gpu"):
+        if cuda_available():
+            return "cuda"
+        logger.warning("Device 'cuda' requested but no CUDA GPU is available — using CPU.")
+        return "cpu"
+    return "cpu"
+
+
 class ModelManager:
     """
     Singleton holding all pre-trained models in CPU memory.
@@ -76,12 +118,14 @@ class ModelManager:
         self,
         yolo_path: str = "yolov8n.pt",
         insightface_name: str = "buffalo_l",
+        device: str = "auto",
     ):
-        """Load all models into memory. Call once on startup."""
+        """Load all models into memory on `device`. Call once on startup."""
         if self._loaded:
             logger.info("Models already loaded, skipping.")
             return
 
+        self.device = resolve_device(device)
         logger.info("Loading models on device: %s", self.device)
         self._load_yolo(yolo_path)
         self._load_arcface(insightface_name)
@@ -91,8 +135,49 @@ class ModelManager:
         self._loaded = True
         logger.info("All models loaded and warmed up successfully.")
 
+    def reload(
+        self,
+        device: str,
+        yolo_path: Optional[str] = None,
+        insightface_name: Optional[str] = None,
+    ) -> dict:
+        """
+        Tear down all models and reload them on a new device. Blocking/CPU-GPU
+        heavy — callers must run this off the event loop and pause inference
+        (hold the inference semaphore) while it runs. Returns the new status().
+        """
+        prev_device = self.device
+        logger.info("Reloading models: %s -> %s", prev_device, device)
+
+        # Drop references so the old (possibly GPU-resident) graphs are freed.
+        self.yolo = None
+        self.face_app = None
+        self.osnet_model = None
+        self.body_model_type = "none"
+        self._loaded = False
+        if prev_device == "cuda" and cuda_available():
+            try:
+                torch.cuda.empty_cache()
+            except Exception:
+                pass
+
+        self.load_all(
+            yolo_path=yolo_path or settings.YOLO_MODEL_PATH,
+            insightface_name=insightface_name or settings.INSIGHTFACE_MODEL_NAME,
+            device=device,
+        )
+        return self.status()
+
     def _load_yolo(self, model_path: str):
         from ultralytics import YOLO
+
+        # On GPU, run the native PyTorch model (.pt) — it executes on CUDA via the
+        # device= arg at predict time. The ONNX fast-path below is CPU-only.
+        if self.device == "cuda":
+            logger.info("Loading YOLOv8n (PyTorch, CUDA) from %s...", model_path)
+            self.yolo = YOLO(model_path)
+            logger.info("YOLOv8n loaded (CUDA).")
+            return
 
         # Prefer an ONNX graph on CPU (typically 2-3x faster). Export once and
         # cache next to the .pt file; fall back to .pt if export/load fails.
@@ -121,15 +206,23 @@ class ModelManager:
     def _load_arcface(self, model_name: str):
         from insightface.app import FaceAnalysis
 
-        logger.info("Loading InsightFace (%s)...", model_name)
+        use_cuda = self.device == "cuda"
+        # Keep CPU as a fallback provider so a missing/mismatched onnxruntime-gpu
+        # (cuDNN, etc.) degrades to CPU for faces rather than crashing the load.
+        providers = (
+            ["CUDAExecutionProvider", "CPUExecutionProvider"]
+            if use_cuda
+            else ["CPUExecutionProvider"]
+        )
+        logger.info("Loading InsightFace (%s) on %s...", model_name, self.device)
         self.face_app = FaceAnalysis(
             name=model_name,
-            providers=["CPUExecutionProvider"],  # CPU-only — never CUDA
+            providers=providers,
             allowed_modules=["detection", "recognition"],
         )
         det = settings.INSIGHTFACE_DET_SIZE
-        self.face_app.prepare(ctx_id=-1, det_size=(det, det))
-        logger.info("InsightFace/ArcFace loaded (CPU, det_size=%d).", det)
+        self.face_app.prepare(ctx_id=0 if use_cuda else -1, det_size=(det, det))
+        logger.info("InsightFace/ArcFace loaded (%s, det_size=%d).", self.device, det)
 
     def _load_body_model(self):
         body_type = settings.BODY_MODEL_TYPE.strip().lower()
@@ -176,7 +269,7 @@ class ModelManager:
             raise RuntimeError(f"Checkpoint {weights_path} is incompatible with OSNet x0.25.")
         self.osnet_model = model.to(self.device).eval()
         self.body_model_type = "osnet"
-        logger.info("OSNet x0.25 body model loaded (512-d re-ID embeddings, CPU).")
+        logger.info("OSNet x0.25 body model loaded (512-d re-ID embeddings, %s).", self.device)
 
     def _warmup(self):
         """Run dummy inference through all models to warm up JIT/graph."""
@@ -184,7 +277,7 @@ class ModelManager:
         dummy = np.zeros((640, 640, 3), dtype=np.uint8)
 
         if self.yolo:
-            self.yolo.predict(dummy, verbose=False, conf=0.5, classes=[0], device="cpu")
+            self.yolo.predict(dummy, verbose=False, conf=0.5, classes=[0], device=self.device)
         if self.face_app:
             self.face_app.get(dummy)
         if self.osnet_model is not None:
@@ -197,7 +290,7 @@ class ModelManager:
     def detect_persons(self, image: np.ndarray, confidence: float = 0.5) -> List[dict]:
         """Run YOLOv8n person detection. Returns [{bbox, confidence}]."""
         results = self.yolo.predict(
-            image, verbose=False, conf=confidence, classes=[0], device="cpu",
+            image, verbose=False, conf=confidence, classes=[0], device=self.device,
         )
         persons = []
         for result in results:
