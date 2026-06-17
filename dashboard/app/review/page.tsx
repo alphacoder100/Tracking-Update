@@ -114,6 +114,9 @@ export default function ReviewQueuePage() {
   const [cleanResult, setCleanResult] = useState<Record<string, string>>({});
   const [merging, setMerging] = useState(false);
   const [mergeResult, setMergeResult] = useState<string | null>(null);
+  // Confidence floor (percent) for the mass auto-merge sweep. Conservative by
+  // default — merging weak pairs can fuse two different people.
+  const [mergeThresholdPct, setMergeThresholdPct] = useState(65);
 
   const flags = data ?? [];
 
@@ -150,13 +153,14 @@ export default function ReviewQueuePage() {
     setMerging(true);
     setMergeResult(null);
     try {
+      const minSim = (mergeThresholdPct / 100).toFixed(2);
       const res = await api.post<{ merged: number; skipped: number }>(
-        "admin/review-queue/auto-merge-duplicates",
+        `admin/review-queue/auto-merge-duplicates?min_similarity=${minSim}`,
       );
       setMergeResult(
         res.merged
-          ? `Merged ${res.merged} duplicate${res.merged === 1 ? "" : "s"} into a single user${res.skipped ? ` · ${res.skipped} skipped` : ""}`
-          : "No duplicates could be merged",
+          ? `Merged ${res.merged} duplicate${res.merged === 1 ? "" : "s"} (≥${mergeThresholdPct}% match) into a single user${res.skipped ? ` · ${res.skipped} skipped` : ""}`
+          : `No duplicates at ≥${mergeThresholdPct}% match — lower the threshold or review manually`,
       );
       await mutate("admin/review-queue?limit=99");
     } catch {
@@ -172,6 +176,14 @@ export default function ReviewQueuePage() {
   }, {});
 
   const duplicateCount = byType["probable_duplicate"] || 0;
+  // How many probable-duplicate flags meet the chosen confidence floor.
+  const qualifyingCount = flags.filter(
+    (f) =>
+      f.flag_type === "probable_duplicate" &&
+      f.matched_visitor_id &&
+      f.similarity != null &&
+      f.similarity * 100 >= mergeThresholdPct,
+  ).length;
 
   return (
     <div className="space-y-6">
@@ -223,15 +235,63 @@ export default function ReviewQueuePage() {
                 )}
               </div>
             </div>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={autoMergeDuplicates}
-              disabled={merging}
-            >
-              <Combine className="h-4 w-4" />
-              {merging ? "Merging…" : "Auto-merge duplicates"}
-            </Button>
+            <div className="flex flex-col items-stretch gap-2 sm:min-w-[16rem]">
+              <div className="flex items-center justify-between gap-3">
+                <label
+                  htmlFor="merge-threshold"
+                  className="text-xs font-medium text-text-secondary"
+                >
+                  Min match
+                </label>
+                <div className="flex items-center gap-1">
+                  <input
+                    id="merge-threshold"
+                    type="number"
+                    min={40}
+                    max={99}
+                    step={1}
+                    value={mergeThresholdPct}
+                    onChange={(e) =>
+                      setMergeThresholdPct(
+                        Math.max(40, Math.min(99, Number(e.target.value) || 0)),
+                      )
+                    }
+                    className="w-16 rounded-control border border-card/60 bg-bg px-2 py-1 text-right text-sm outline-none focus:border-primary"
+                  />
+                  <span className="text-sm text-text-muted">%</span>
+                </div>
+              </div>
+              <input
+                type="range"
+                min={40}
+                max={99}
+                step={1}
+                value={mergeThresholdPct}
+                onChange={(e) => setMergeThresholdPct(Number(e.target.value))}
+                className="w-full accent-primary"
+              />
+              <p className="text-[11px] text-text-muted">
+                {qualifyingCount} of {duplicateCount} duplicate
+                {duplicateCount === 1 ? "" : "s"} qualify at ≥{mergeThresholdPct}%.
+                {mergeThresholdPct < 60 && (
+                  <span className="text-warning">
+                    {" "}
+                    Low threshold risks merging different people.
+                  </span>
+                )}
+              </p>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={autoMergeDuplicates}
+                disabled={merging || qualifyingCount === 0}
+              >
+                <Combine className="h-4 w-4" />
+                {merging
+                  ? "Merging…"
+                  : `Auto-merge ${qualifyingCount} duplicate${qualifyingCount === 1 ? "" : "s"}`}
+              </Button>
+            </div>
           </div>
         </Card>
       )}

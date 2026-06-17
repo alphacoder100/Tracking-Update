@@ -42,6 +42,11 @@ class Settings(BaseSettings):
     # creation conservative (low) avoids fragmenting one person into many
     # visitor records in the grey zone.
     NEW_VISITOR_MAX_SIMILARITY: float = 0.45
+    # Default similarity floor for the review-queue "auto-merge duplicates" sweep.
+    # Only probable_duplicate flags whose recorded similarity is >= this value are
+    # mass-merged; weaker pairs stay for human review. Set conservatively (a
+    # confident same-person match) so a bulk sweep never fuses two people.
+    AUTO_MERGE_MIN_SIMILARITY: float = 0.65
 
     # ── Body (OSNet) re-ID fallback ──────────────────────────
     # OSNet body embeddings are CLOTHING/APPEARANCE dependent: they only

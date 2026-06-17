@@ -68,6 +68,18 @@ async def merge_visitors(
         (target.total_faces_recorded or 0) + (source.total_faces_recorded or 0)
     )
 
+    # Rebuild the centroid from the now-pooled gallery so it reflects every face
+    # (both visitors'), not the target's stale adaptive average. Done before the
+    # source delete; the re-pointed faces are already visible in this tx.
+    try:
+        from app.services.auto_enroller import recompute_centroid_from_gallery
+        await recompute_centroid_from_gallery(db, target)
+    except Exception as exc:
+        logger.warning(
+            "Centroid recompute after merge %s→%s failed (%s) — keeping existing.",
+            source_id, target_id, exc,
+        )
+
     # Drop the merged visitor from the in-memory tracker if present.
     tracker = VisitTracker.get_instance()
     tracker.active_visits.pop(source_id, None)

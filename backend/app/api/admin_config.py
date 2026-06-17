@@ -13,7 +13,7 @@ new value immediately.
 import logging
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Security
+from fastapi import APIRouter, Depends, HTTPException, Query, Security
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, field_validator, model_validator
 from sqlalchemy import text
@@ -216,12 +216,18 @@ async def get_review_queue(
 
 @router.post("/review-queue/auto-merge-duplicates")
 async def auto_merge_review_duplicates(
+    min_similarity: Optional[float] = Query(
+        None, ge=0.0, le=1.0,
+        description="Only merge duplicate flags with similarity >= this "
+                    "(defaults to AUTO_MERGE_MIN_SIMILARITY).",
+    ),
     _key: str = Security(verify_admin_api_key),
     db: AsyncSession = Depends(get_db),
 ):
-    """Merge all probable-duplicate flags into their matched visitor (global dedup)."""
+    """Merge probable-duplicate flags above a confidence floor into their matched
+    visitor (global dedup). Weaker pairs are left for human review."""
     from app.services.review_queue import auto_merge_duplicates
-    return await auto_merge_duplicates(db)
+    return await auto_merge_duplicates(db, min_similarity=min_similarity)
 
 
 @router.post("/review-queue/{flag_id}/resolve")

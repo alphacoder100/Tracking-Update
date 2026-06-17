@@ -243,6 +243,62 @@ async def update_centroid(
     visitor.face_embedding = normalize_embedding(updated)
 
 
+async def recompute_centroid_from_gallery(db: AsyncSession, visitor: Visitor) -> bool:
+    """
+    Rebuild a visitor's face (and body) centroid from its current gallery faces,
+    quality-weighted by det_score. Mutates `visitor` in place WITHOUT committing —
+    the caller owns the transaction.
+
+    Used after a merge (or gallery edit) so the centroid reflects the pooled set
+    of faces rather than a stale adaptive average. Returns False (centroid left
+    untouched) when the visitor has no usable gallery embeddings.
+    """
+    rows = await db.execute(
+        select(
+            VisitorFace.embedding,
+            VisitorFace.det_score,
+            VisitorFace.body_embedding,
+        ).where(VisitorFace.visitor_id == visitor.id)
+    )
+
+    face_vecs: list[np.ndarray] = []
+    weights: list[float] = []
+    body_vecs: list[np.ndarray] = []
+    best_det = 0.0
+
+    for emb, det_score, body_emb in rows.all():
+        if emb is None:
+            continue
+        face_vecs.append(np.asarray(emb, dtype=np.float32))
+        # Weight by quality, with a floor so every gallery face still counts.
+        weights.append(max(float(det_score or 0.0), 0.05))
+        best_det = max(best_det, float(det_score or 0.0))
+        if body_emb is not None:
+            body_vecs.append(np.asarray(body_emb, dtype=np.float32))
+
+    if not face_vecs:
+        return False
+
+    w = np.asarray(weights, dtype=np.float32)[:, None]
+    face_centroid = (np.stack(face_vecs) * w).sum(axis=0) / w.sum()
+    visitor.face_embedding = normalize_embedding(face_centroid)
+
+    if best_det > 0:
+        visitor.best_face_det_score = max(
+            float(visitor.best_face_det_score or 0.0), best_det
+        )
+    if body_vecs:
+        visitor.body_embedding = normalize_embedding(
+            np.mean(np.stack(body_vecs), axis=0)
+        )
+
+    logger.info(
+        "Recomputed centroid for visitor %s from %d gallery face(s).",
+        visitor.id, len(face_vecs),
+    )
+    return True
+
+
 async def _is_diverse_embedding(
     db: AsyncSession,
     visitor_id: UUID,
@@ -370,6 +426,10 @@ async def clean_visitor_gallery(db: AsyncSession, visitor_id: UUID) -> dict:
         visitor.best_face_det_score = max(
             (f.det_score or 0.0 for f in survivors), default=0.0
         )
+
+    # Removing faces changes the gallery — rebuild the centroid from survivors.
+    if removed:
+        await recompute_centroid_from_gallery(db, visitor)
 
     await db.commit()
 

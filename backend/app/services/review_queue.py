@@ -149,16 +149,29 @@ async def get_pending_flags(db: AsyncSession, limit: int = 50) -> list[dict]:
     ]
 
 
-async def auto_merge_duplicates(db: AsyncSession, limit: int = 200) -> dict:
+async def auto_merge_duplicates(
+    db: AsyncSession,
+    limit: int = 200,
+    min_similarity: Optional[float] = None,
+) -> dict:
     """
-    Global one-click dedup: merge every unresolved `probable_duplicate` into the
-    existing visitor it resembles (highest-confidence first), collapsing each pair
-    into a single user. Merging the source visitor cascade-deletes its own flag, so
-    only un-mergeable flags (missing/already-merged target) are explicitly resolved.
+    Global one-click dedup: merge every unresolved `probable_duplicate` whose
+    recorded similarity is >= `min_similarity` into the existing visitor it
+    resembles (highest-confidence first), collapsing each pair into a single
+    user. Merging the source visitor cascade-deletes its own flag, so only
+    un-mergeable flags (missing/already-merged target) are explicitly resolved.
 
-    Returns {merged, skipped, total}.
+    `min_similarity` defaults to settings.AUTO_MERGE_MIN_SIMILARITY. A confident
+    floor matters: mass-merging weak (~0.40) pairs can fuse two different people
+    and corrupt a gallery, which is worse than a duplicate. Flags below the floor
+    (or with no recorded similarity) are left for human review.
+
+    Returns {merged, skipped, total, min_similarity}.
     """
     from app.services.visitor_merge import MergeError, merge_visitors
+
+    if min_similarity is None:
+        min_similarity = settings.AUTO_MERGE_MIN_SIMILARITY
 
     try:
         rows = (await db.execute(text("""
@@ -167,12 +180,14 @@ async def auto_merge_duplicates(db: AsyncSession, limit: int = 200) -> dict:
             WHERE resolved = FALSE
               AND flag_type = 'probable_duplicate'
               AND matched_visitor_id IS NOT NULL
+              AND similarity IS NOT NULL
+              AND similarity >= :min_sim
             ORDER BY similarity DESC NULLS LAST
             LIMIT :lim
-        """), {"lim": limit})).all()
+        """), {"lim": limit, "min_sim": min_similarity})).all()
     except Exception as exc:
         logger.error("auto_merge_duplicates query failed: %s", exc)
-        return {"merged": 0, "skipped": 0, "total": 0}
+        return {"merged": 0, "skipped": 0, "total": 0, "min_similarity": min_similarity}
 
     merged = 0
     skipped = 0
@@ -194,7 +209,12 @@ async def auto_merge_duplicates(db: AsyncSession, limit: int = 200) -> dict:
         gone.add(str(r.visitor_id))
         merged += 1
 
-    return {"merged": merged, "skipped": skipped, "total": len(rows)}
+    return {
+        "merged": merged,
+        "skipped": skipped,
+        "total": len(rows),
+        "min_similarity": min_similarity,
+    }
 
 
 async def resolve_flag(db: AsyncSession, flag_id: UUID) -> bool:
