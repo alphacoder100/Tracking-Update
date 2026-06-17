@@ -12,7 +12,7 @@ import json
 class Settings(BaseSettings):
     # ── Database ─────────────────────────────────────────────
     DATABASE_URL: str = (
-        "postgresql+asyncpg://tracker:tracker_pass@localhost:3004/restaurant_tracker"
+        "postgresql+asyncpg://tracker:tracker_pass@localhost:3018/restaurant_tracker"
     )
 
     # ── Authentication ───────────────────────────────────────

@@ -1,10 +1,10 @@
 services:
   postgres:
     image: pgvector/pgvector:pg16
-    container_name: tracker_postgres
+    container_name: tracker_postgres_new
     restart: unless-stopped
     ports:
-      - "3004:5432"
+      - "3018:5432"
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-tracker}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tracker_pass}
@@ -24,10 +24,10 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: tracker_redis
+    container_name: tracker_redis_new
     restart: unless-stopped
     ports:
-      - "3005:6379"
+      - "3019:6379"
     command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --save ""
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -41,10 +41,10 @@ services:
 
   pgadmin:
     image: dpage/pgadmin4
-    container_name: tracker_pgadmin
+    container_name: tracker_pgadmin_new
     restart: unless-stopped
     ports:
-      - "3002:80"
+      - "3015:80"
     environment:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@admin.com}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
@@ -58,12 +58,12 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: tracker_backend
+    container_name: tracker_backend_new
     restart: unless-stopped
     privileged: true
     ports:
-      # Host 3001 -> container 8000 (uvicorn still listens on 8000 internally).
-      - "3001:8000"
+      # Host 3016 -> container 8000 (uvicorn still listens on 8000 internally).
+      - "3016:8000"
     environment:
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-tracker}:${POSTGRES_PASSWORD:-tracker_pass}@postgres:5432/${POSTGRES_DB:-restaurant_tracker}
       - REDIS_URL=redis://redis:6379/0
@@ -92,10 +92,10 @@ services:
     build:
       context: ./dashboard
       dockerfile: Dockerfile
-    container_name: tracker_dashboard
+    container_name: tracker_dashboard_new
     restart: unless-stopped
     ports:
-      - "3003:3003"
+      - "3017:3003"
     environment:
       # Server-side proxy target. Backend runs on host machine (not in Docker)
       - BACKEND_URL=http://host.docker.internal:8000
