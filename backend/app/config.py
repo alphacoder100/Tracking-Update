@@ -48,6 +48,19 @@ class Settings(BaseSettings):
     # visitor (top-2 rows can otherwise both belong to the same person, hiding
     # the real runner-up).
     IDENTITY_TOP_K: int = 10
+    # pgvector HNSW search breadth (the size of the dynamic candidate list). The
+    # default of 40 silently under-fetches once the gallery search also filters on
+    # is_active / consent_status / pose_bin INSIDE the LIMIT, so true matches can
+    # be missed → the same person re-registered as new. Set per resolve
+    # transaction via `SET LOCAL hnsw.ef_search`. Must be >= IDENTITY_TOP_K; 100 is
+    # a strong recall/latency trade-off for galleries up to ~1e6 rows. 0 leaves the
+    # server default (no SET issued).
+    #
+    # Note: pgvector's `<=>` distance for a returned row is already EXACT (we use
+    # L2-normalized embeddings, so `1 - cosine_distance` is the true cosine). HNSW
+    # is approximate only in WHICH rows it returns — so the right lever for recall
+    # is ef_search (this), not a NumPy re-rank of the rows it already returned.
+    HNSW_EF_SEARCH: int = 100
     # What to do with a "grey zone" face (REJECT_SIMILARITY < top_sim <
     # RETURNING_FACE_THRESHOLD): it is neither a confident match nor a confident
     # stranger, so creating a NEW visitor from it is the #1 cause of duplicate
@@ -200,6 +213,14 @@ class Settings(BaseSettings):
     # for a reliable embedding.
     MIN_FACE_SIZE_PX: int = 40
     MIN_FACE_DET_SCORE: float = 0.40
+    # When the single full-frame ArcFace pass assigns no face to a person box,
+    # retry face detection on that person's upscaled crop. This rescues small /
+    # partially-occluded faces the full-frame detector missed, but costs one extra
+    # ArcFace forward pass PER such person — the dominant per-frame cost in crowds.
+    # Set False to trust the full-frame pass only (faster; slightly lower face
+    # recall on small distant faces). The full-frame small-face rescue
+    # (refine_small_face) still runs regardless.
+    PER_PERSON_FACE_FALLBACK: bool = True
 
     # ── Upload limits (/api/detect) ──────────────────────────
     VIDEO_MAX_SIZE_MB: int = 100
@@ -271,6 +292,37 @@ class Settings(BaseSettings):
     # Require at least this many observations before a tracklet that never matched
     # a known visitor is allowed to register a NEW visitor.
     TRACKLET_MIN_OBSERVATIONS_NEW: int = 2
+
+    # ── Tracklet fast-path (skip gallery search for known tracklets) ──
+    # Once a tracklet is confidently resolved to a visitor, later frames of that
+    # SAME tracklet (same camera, overlapping body) skip the expensive HNSW gallery
+    # search and attribute directly to the pinned visitor. This is the big CPU win
+    # for stationary/seated patrons: frame 2..N of a known person become a cheap
+    # IoU association + visit-tracker heartbeat instead of a full re-resolve.
+    #
+    # OFF by default so behaviour is unchanged until you opt in. Identity can't
+    # silently drift because the pin is RE-VERIFIED (a full gallery search is
+    # forced) whenever any of these fire:
+    #   • more than TRACKLET_REVERIFY_SECONDS elapsed since the last verification,
+    #   • the body bbox moved enough that IoU with the last box drops below
+    #     TRACKLET_REVERIFY_IOU (a possible tracking swap in a crowd),
+    #   • the aligned face crop changed materially (the per-stream face-embedding
+    #     cache missed → not the same stable face we verified).
+    TRACKLET_FAST_PATH: bool = False
+    # Re-verify a pinned tracklet at least this often (seconds). Lower = safer
+    # (more frequent full resolves), higher = faster. 0 disables the time trigger
+    # (only the IoU / face-change triggers force a re-verify — most aggressive).
+    # Default 2.0 is conservative: it keeps the per-visit speed win but bounds any
+    # mis-attribution to a ~2 s window, so the fast-path stays close to the
+    # every-frame slow path on accuracy. Raise toward 5–10 s for sparse/seated
+    # scenes where more throughput is worth a slightly wider window.
+    TRACKLET_REVERIFY_SECONDS: float = 2.0
+    # Force a re-verify when the current body box's IoU with the tracklet's last
+    # box falls below this — i.e. the person moved/swapped enough that the cheap
+    # association is no longer trustworthy. 1.0 would re-verify every frame. 0.7 is
+    # conservative (a fairly stationary body); lower it toward 0.5 to fast-path
+    # through more movement at a slightly higher swap risk in crowds.
+    TRACKLET_REVERIFY_IOU: float = 0.7
 
     # ── Registration pose gate (reduce duplicate registrations) ──
     # A brand-new visitor is only CREATED from a roughly front-facing view.
