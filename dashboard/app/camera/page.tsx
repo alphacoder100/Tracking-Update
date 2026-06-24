@@ -28,6 +28,7 @@ export default function CameraPage() {
   );
 
   const [source, setSource] = useState("0");
+  const [cameraId, setCameraId] = useState("");
   const [fps, setFps] = useState("1.0");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -52,7 +53,11 @@ export default function CameraPage() {
     setBusy(true);
     setMsg(null);
     try {
-      await api.post("camera/start", { source, fps: parseFloat(fps) });
+      await api.post("camera/start", {
+        source,
+        camera_id: cameraId || undefined,
+        fps: parseFloat(fps),
+      });
       await mutate();
     } catch (e) {
       setMsg((e as Error).message);
@@ -224,6 +229,16 @@ export default function CameraPage() {
                 value={source}
                 onChange={(e) => setSource(e.target.value)}
                 disabled={running}
+                className="mt-1 w-full rounded-control border border-card/60 bg-bg px-3 py-2 text-sm outline-none focus:border-primary disabled:opacity-50"
+              />
+            </label>
+            <label className="block text-sm">
+              <span className="text-text-secondary">Camera ID (optional — name this camera)</span>
+              <input
+                value={cameraId}
+                onChange={(e) => setCameraId(e.target.value)}
+                disabled={running}
+                placeholder="cam-0"
                 className="mt-1 w-full rounded-control border border-card/60 bg-bg px-3 py-2 text-sm outline-none focus:border-primary disabled:opacity-50"
               />
             </label>

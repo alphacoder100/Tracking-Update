@@ -12,6 +12,7 @@ from fastapi.security import APIKeyHeader
 from app.api import verify_api_key
 from app.config import settings
 from app.schemas import CameraStartRequest, CameraStatusResponse, RoiRequest, RoiResponse, BoundingBox
+from app.services.camera_manager import CameraManager
 from app.services.camera_service import CameraService
 from app.utils import is_video_upload
 
@@ -32,12 +33,14 @@ async def start_camera(
     request: CameraStartRequest,
     _key: str = Security(verify_api_key),
 ):
-    cam = CameraService.get_instance()
+    manager = CameraManager.get_instance()
     try:
-        await cam.start(source=request.source, camera_id=request.camera_id, fps=request.fps)
+        cam = await manager.start(
+            source=request.source, camera_id=request.camera_id, fps=request.fps
+        )
     except RuntimeError as e:
         raise HTTPException(status_code=409, detail=str(e))
-    return {"status": "started", "source": cam.source}
+    return {"status": "started", "source": cam.source, "camera_id": cam.camera_id}
 
 
 @router.post("/upload-video")
@@ -99,23 +102,63 @@ async def upload_video_stream(
 
 
 @router.post("/stop")
-async def stop_camera(_key: str = Security(verify_api_key)):
-    cam = CameraService.get_instance()
-    await cam.stop()
-    return {"status": "stopped"}
+async def stop_camera(
+    camera_id: Optional[str] = Query(None),
+    all: bool = Query(False, description="Stop every running camera."),
+    _key: str = Security(verify_api_key),
+):
+    manager = CameraManager.get_instance()
+    if all:
+        await manager.stop_all()
+        return {"status": "stopped", "scope": "all"}
+    await manager.stop(camera_id)
+    return {"status": "stopped", "camera_id": camera_id or manager.default_id()}
+
+
+@router.get("/cameras", response_model=list[CameraStatusResponse])
+async def list_cameras(_key: str = Security(verify_api_key)):
+    """Status of every registered camera — drives the Multicam grid."""
+    return [CameraStatusResponse(**s) for s in CameraManager.get_instance().list_status()]
+
+
+def _idle_status(camera_id: Optional[str]) -> dict:
+    """Placeholder status for a camera id that has never been started."""
+    return {
+        "pipeline": "parallel" if settings.PIPELINE_PARALLEL else "sequential",
+        "is_running": False,
+        "source": None,
+        "source_kind": None,
+        "looping": False,
+        "camera_id": camera_id or settings.CAMERA_ID,
+        "fps": None,
+        "frames_processed": 0,
+        "frames_skipped": 0,
+        "persons_detected": 0,
+        "new_visitors": 0,
+        "returning_visitors": 0,
+        "uptime_seconds": 0.0,
+        "last_error": None,
+    }
 
 
 @router.get("/status", response_model=CameraStatusResponse)
-async def camera_status(_key: str = Security(verify_api_key)):
-    return CameraStatusResponse(**CameraService.get_instance().status())
+async def camera_status(
+    camera_id: Optional[str] = Query(None),
+    _key: str = Security(verify_api_key),
+):
+    cam = CameraManager.get_instance().get(camera_id)
+    status = cam.status() if cam is not None else _idle_status(camera_id)
+    return CameraStatusResponse(**status)
 
 
 @router.get("/snapshot")
 async def camera_snapshot(
     annotated: bool = True,
+    camera_id: Optional[str] = Query(None),
     _key: str = Security(verify_api_key),
 ):
-    jpeg = CameraService.get_instance().snapshot_jpeg(annotated=annotated)
+    cam = CameraManager.get_instance().get(camera_id)
+    jpeg = cam.snapshot_jpeg(annotated=annotated) if cam is not None else None
     if jpeg is None:
         raise HTTPException(status_code=404, detail="No frame available yet.")
     return Response(content=jpeg, media_type="image/jpeg")
@@ -123,6 +166,7 @@ async def camera_snapshot(
 
 @router.get("/stream")
 async def camera_stream(
+    camera_id: Optional[str] = Query(None),
     api_key: Optional[str] = Query(None, description="API key (for <img> tags that can't set headers)"),
     header_key: Optional[str] = Security(_stream_api_key_header),
 ):
@@ -138,8 +182,8 @@ async def camera_stream(
     if not provided or provided != settings.API_KEY:
         raise HTTPException(status_code=403, detail="Invalid or missing API key.")
 
-    cam = CameraService.get_instance()
-    if not cam.is_running:
+    cam = CameraManager.get_instance().get(camera_id)
+    if cam is None or not cam.is_running:
         raise HTTPException(status_code=409, detail="Camera is not running.")
 
     return StreamingResponse(
@@ -152,17 +196,21 @@ async def camera_stream(
 @router.post("/roi", response_model=RoiResponse)
 async def set_roi(
     body: RoiRequest,
+    camera_id: Optional[str] = Query(None),
     _key: str = Security(verify_api_key),
 ):
-    cam = CameraService.get_instance()
+    cam = CameraManager.get_instance().get_or_create(camera_id)
     cam.roi = body.roi.model_dump() if body.roi else None
     return RoiResponse(roi=body.roi)
 
 
 @router.get("/roi", response_model=RoiResponse)
-async def get_roi(_key: str = Security(verify_api_key)):
-    cam = CameraService.get_instance()
-    roi = cam.roi
+async def get_roi(
+    camera_id: Optional[str] = Query(None),
+    _key: str = Security(verify_api_key),
+):
+    cam = CameraManager.get_instance().get(camera_id)
+    roi = cam.roi if cam is not None else None
     return RoiResponse(
         roi=BoundingBox(**roi) if roi else None
     )

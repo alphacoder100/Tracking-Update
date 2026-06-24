@@ -46,7 +46,7 @@ from app.database import AsyncSessionLocal, engine, get_db, init_db
 from app.ml_models import ModelManager
 from app.models import Visit, Visitor
 from app.schemas import HealthResponse
-from app.services.camera_service import CameraService
+from app.services.camera_manager import CameraManager, parse_cameras_config
 from app.services.visit_tracker import VisitTracker
 
 logging.basicConfig(
@@ -197,16 +197,25 @@ async def lifespan(app: FastAPI):
     _spawn(monitoring_loop(get_db))
 
     if settings.CAMERA_AUTOSTART:
-        try:
-            await CameraService.get_instance().start()
-        except Exception as exc:
-            logger.warning("Camera autostart failed: %s", exc)
+        manager = CameraManager.get_instance()
+        cameras = parse_cameras_config(settings.CAMERAS)
+        if not cameras:
+            # Single-camera fallback (legacy CAMERA_SOURCE/CAMERA_ID).
+            cameras = [(settings.CAMERA_ID, settings.CAMERA_SOURCE)]
+        for cid, source in cameras:
+            # Isolate failures so one bad source (e.g. an RTSP camera that's
+            # offline) doesn't stop the others from starting.
+            try:
+                await manager.start(source=source, camera_id=cid)
+                logger.info("Autostarted camera '%s' (source=%s).", cid, source)
+            except Exception as exc:
+                logger.warning("Camera autostart failed for '%s': %s", cid, exc)
 
     logger.info("Startup complete.")
     yield
 
     logger.info("Shutting down...")
-    await CameraService.get_instance().stop()
+    await CameraManager.get_instance().stop_all()
     for task in list(_background_tasks):
         task.cancel()
     await engine.dispose()
@@ -286,7 +295,7 @@ async def health_check(db: AsyncSession = Depends(get_db)):
         yolo_loaded=status["yolo_loaded"],
         arcface_loaded=status["arcface_loaded"],
         body_model=status["body_model"],
-        camera_running=CameraService.get_instance().is_running,
+        camera_running=CameraManager.get_instance().any_running(),
         visitors_count=visitors_count,
         total_visits=total_visits,
     )

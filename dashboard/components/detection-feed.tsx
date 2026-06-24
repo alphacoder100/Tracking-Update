@@ -14,9 +14,11 @@ import type { CameraStatus } from "@/lib/types";
 export function DetectionFeed({
   onStatus,
   pollMs = 350,
+  cameraId,
 }: {
   onStatus?: (s: CameraStatus) => void;
   pollMs?: number;
+  cameraId?: string;
 }) {
   const [frame, setFrame] = useState<string | null>(null);
   const [status, setStatus] = useState<CameraStatus | null>(null);
@@ -26,16 +28,21 @@ export function DetectionFeed({
 
   useEffect(() => {
     let closed = false;
+    const camParam = cameraId ? `camera_id=${encodeURIComponent(cameraId)}` : "";
 
     const poll = async () => {
       if (closed) return;
       try {
-        const s = await api.get<CameraStatus>("camera/status");
+        const s = await api.get<CameraStatus>(
+          `camera/status${camParam ? `?${camParam}` : ""}`,
+        );
         setStatus(s);
         onStatusRef.current?.(s);
 
         if (s.is_running) {
-          const res = await fetch(`/api/backend/camera/snapshot?t=${Date.now()}`);
+          const res = await fetch(
+            `/api/backend/camera/snapshot?t=${Date.now()}${camParam ? `&${camParam}` : ""}`,
+          );
           if (res.ok) {
             const blob = await res.blob();
             const url = URL.createObjectURL(blob);
@@ -58,7 +65,7 @@ export function DetectionFeed({
       clearInterval(id);
       if (lastUrl.current) URL.revokeObjectURL(lastUrl.current);
     };
-  }, [pollMs]);
+  }, [pollMs, cameraId]);
 
   const running = status?.is_running;
   const isVideo = status?.source_kind === "video";

@@ -9,6 +9,7 @@ import {
   Camera,
   ClipboardCheck,
   LayoutDashboard,
+  LayoutGrid,
   Clapperboard,
   Settings,
   Users,
@@ -25,6 +26,7 @@ const NAV = [
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/activity", label: "Activity", icon: Activity },
   { href: "/review", label: "Review Queue", icon: ClipboardCheck, badgeKey: "review" },
+  { href: "/multicam", label: "Multicam", icon: LayoutGrid },
   { href: "/camera", label: "Camera", icon: Camera },
   { href: "/settings", label: "Settings", icon: Settings },
 ];

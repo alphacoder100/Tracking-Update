@@ -124,7 +124,11 @@ class Settings(BaseSettings):
     CAMERA_FPS: float = 1.0
     # Camera id stored on visits/events (lets analytics distinguish cameras).
     CAMERA_ID: str = "cam-0"
-    # Auto-start the camera loop on application startup.
+    # Multiple cameras to run concurrently, as ";"-separated "id=source" pairs,
+    # e.g. "cam-web=0;cam-rtsp=rtsp://user:pass@192.168.1.10:554/stream". When
+    # set, this takes precedence over CAMERA_SOURCE/CAMERA_ID for autostart.
+    CAMERAS: str = ""
+    # Auto-start the camera loop(s) on application startup.
     CAMERA_AUTOSTART: bool = False
     # JPEG quality (0-100) for snapshot / live-feed frames.
     LIVE_FEED_JPEG_QUALITY: int = 70

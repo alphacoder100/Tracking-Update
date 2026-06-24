@@ -65,18 +65,21 @@ def _filter_by_roi(detections: list, roi: dict) -> list:
 
 
 class CameraService:
-    """Singleton background camera processor."""
+    """Background processor for a single camera source.
 
-    _instance: Optional["CameraService"] = None
+    One instance per physical source. Multiple instances run concurrently under
+    the CameraManager registry (see services/camera_manager.py); nothing here is
+    global, so an RTSP camera and a webcam can each have their own service.
+    """
 
-    def __init__(self):
+    def __init__(self, camera_id: Optional[str] = None):
         self.capture: Optional[cv2.VideoCapture] = None
         self.is_running = False
         self._task: Optional[asyncio.Task] = None
         self._last_frame: Optional[np.ndarray] = None
         self._last_annotated: Optional[np.ndarray] = None
         self.source: Optional[str] = None
-        self.camera_id: str = settings.CAMERA_ID
+        self.camera_id: str = camera_id or settings.CAMERA_ID
         self.fps: float = settings.CAMERA_FPS
         self.started_at: Optional[float] = None
         self.last_error: Optional[str] = None
@@ -105,9 +108,12 @@ class CameraService:
 
     @classmethod
     def get_instance(cls) -> "CameraService":
-        if cls._instance is None:
-            cls._instance = cls()
-        return cls._instance
+        """Backward-compatible accessor → the registry's default camera.
+
+        Lazily imported to avoid a circular import at module load time.
+        """
+        from app.services.camera_manager import CameraManager
+        return CameraManager.get_instance().get_or_create(None)
 
     async def start(
         self,
