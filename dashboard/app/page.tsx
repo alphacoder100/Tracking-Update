@@ -8,6 +8,7 @@ import type { ActivityResponse, GateStats } from "@/lib/types";
 import { DetectionFeed } from "@/components/detection-feed";
 import { ActivityFeed } from "@/components/activity-feed";
 import { StatCard } from "@/components/stat-card";
+import { GateActivity } from "@/components/gate-activity";
 import { Card, CardTitle, PageHeader } from "@/components/ui";
 
 export default function LiveMonitorPage() {
@@ -42,6 +43,13 @@ export default function LiveMonitorPage() {
             tone="primary"
           />
         </div>
+      )}
+
+      {gate?.enabled && (
+        <Card>
+          <CardTitle>Gate Activity</CardTitle>
+          <GateActivity inside={gate.inside ?? []} recent={gate.recent_passes ?? []} />
+        </Card>
       )}
 
       <DetectionFeed />

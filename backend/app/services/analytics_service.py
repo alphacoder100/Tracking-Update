@@ -291,15 +291,35 @@ async def gate_stats(db: AsyncSession, limit: int = 10) -> dict:
     exit_ = (settings.EXIT_CAMERA_ID or "").strip()
     enabled = bool(settings.GATE_COUNTING_ENABLED and entry and exit_ and entry != exit_)
 
-    empty = {
+    base = {
         "enabled": enabled,
         "entry_camera_id": entry or None,
         "exit_camera_id": exit_ or None,
+    }
+    empty = {
+        **base,
         "currently_inside": 0,
         "completed_today": 0,
         "completed_total": 0,
+        "inside": [],
         "recent_passes": [],
     }
+
+    def pass_dict(r) -> dict:
+        return {
+            "id": str(r.id),
+            "visitor_id": str(r.visitor_id) if r.visitor_id else None,
+            "visitor_name": r.visitor_name,
+            "thumbnail_url": (
+                f"/api/visitors/{r.visitor_id}/thumbnail"
+                if r.visitor_id and r.thumbnail_path else None
+            ),
+            "entry_camera_id": r.entry_camera_id,
+            "exit_camera_id": r.exit_camera_id,
+            "entered_at": r.entered_at.isoformat() if r.entered_at else None,
+            "exited_at": r.exited_at.isoformat() if r.exited_at else None,
+            "duration_seconds": r.duration_seconds,
+        }
 
     now = datetime.now(timezone.utc)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -312,8 +332,19 @@ async def gate_stats(db: AsyncSession, limit: int = 10) -> dict:
             FROM gate_visits
         """), {"today": today_start})).one()
 
+        inside = (await db.execute(text("""
+            SELECT g.id, g.visitor_id, vis.name AS visitor_name, vis.thumbnail_path,
+                   g.entry_camera_id, g.exit_camera_id,
+                   g.entered_at, g.exited_at, g.duration_seconds
+            FROM gate_visits g
+            LEFT JOIN visitors vis ON vis.id = g.visitor_id
+            WHERE g.exited_at IS NULL AND NOT g.completed
+            ORDER BY g.entered_at DESC
+            LIMIT :limit
+        """), {"limit": max(1, limit)})).all()
+
         recent = (await db.execute(text("""
-            SELECT g.id, g.visitor_id, vis.name AS visitor_name,
+            SELECT g.id, g.visitor_id, vis.name AS visitor_name, vis.thumbnail_path,
                    g.entry_camera_id, g.exit_camera_id,
                    g.entered_at, g.exited_at, g.duration_seconds
             FROM gate_visits g
@@ -327,23 +358,10 @@ async def gate_stats(db: AsyncSession, limit: int = 10) -> dict:
         return empty
 
     return {
-        "enabled": enabled,
-        "entry_camera_id": entry or None,
-        "exit_camera_id": exit_ or None,
+        **base,
         "currently_inside": int(counts.currently_inside or 0),
         "completed_today": int(counts.completed_today or 0),
         "completed_total": int(counts.completed_total or 0),
-        "recent_passes": [
-            {
-                "id": str(r.id),
-                "visitor_id": str(r.visitor_id),
-                "visitor_name": r.visitor_name,
-                "entry_camera_id": r.entry_camera_id,
-                "exit_camera_id": r.exit_camera_id,
-                "entered_at": r.entered_at.isoformat() if r.entered_at else None,
-                "exited_at": r.exited_at.isoformat() if r.exited_at else None,
-                "duration_seconds": r.duration_seconds,
-            }
-            for r in recent
-        ],
+        "inside": [pass_dict(r) for r in inside],
+        "recent_passes": [pass_dict(r) for r in recent],
     }

@@ -208,8 +208,9 @@ export interface DetectionQuality {
 // Entry→exit gate counting (from GET /api/analytics/gate).
 export interface GatePass {
   id: string;
-  visitor_id: string;
+  visitor_id: string | null;
   visitor_name: string | null;
+  thumbnail_url: string | null;
   entry_camera_id: string | null;
   exit_camera_id: string | null;
   entered_at: string;
@@ -224,6 +225,7 @@ export interface GateStats {
   currently_inside: number;
   completed_today: number;
   completed_total: number;
+  inside: GatePass[];
   recent_passes: GatePass[];
 }
 
