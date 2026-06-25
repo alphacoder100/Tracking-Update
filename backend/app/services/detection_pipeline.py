@@ -21,6 +21,7 @@ from app.ml_models import ModelManager
 from app.models import DetectionEvent, Visitor
 from app.services import auto_enroller, identity_resolver
 from app.services.visit_tracker import VisitTracker
+from app.services.gate_tracker import GateVisitTracker
 from app.services.temporal_consistency import temporal_gate
 from app.services.tracklet import tracklet_buffer
 from app.services import cross_camera
@@ -464,6 +465,14 @@ async def process_detections(
             camera_id=camera_id,
         )
         pd.visit_id = visit_id
+
+        # Two-camera entry→exit gate counting (additive; inert unless enabled and
+        # this camera is the configured entry/exit). Decoupled from identity — it
+        # consumes only the resolved visitor_id + camera_id. Writes to this same
+        # session so the gate row commits atomically with the visitor/visit.
+        await GateVisitTracker.get_instance().process(
+            db, visitor_id=pd.visitor_id, camera_id=camera_id, timestamp=timestamp
+        )
 
         # Feed confirmed detections into the temporal gate
         if det.face_embedding:

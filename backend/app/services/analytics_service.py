@@ -275,3 +275,75 @@ async def pipeline_quality(
         "tracklet_recoveries": by_source.get("tracklet", 0),
         "new_registrations": new_regs,
     }
+
+
+# ── Entry/Exit gate counting ─────────────────────────────────────────────────
+
+async def gate_stats(db: AsyncSession, limit: int = 10) -> dict:
+    """Entry→exit gate counting status + completed-visit counts.
+
+    A pass is: completed (completed=True), open (exited_at IS NULL AND NOT
+    completed), or abandoned (exited_at set but completed=False — see
+    gate_tracker.cleanup_stale). "currently_inside" counts open passes; the
+    completed counts drive the dashboard "Completed Visits" metric.
+    """
+    entry = (settings.ENTRY_CAMERA_ID or "").strip()
+    exit_ = (settings.EXIT_CAMERA_ID or "").strip()
+    enabled = bool(settings.GATE_COUNTING_ENABLED and entry and exit_ and entry != exit_)
+
+    empty = {
+        "enabled": enabled,
+        "entry_camera_id": entry or None,
+        "exit_camera_id": exit_ or None,
+        "currently_inside": 0,
+        "completed_today": 0,
+        "completed_total": 0,
+        "recent_passes": [],
+    }
+
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    try:
+        counts = (await db.execute(text("""
+            SELECT
+                COUNT(*) FILTER (WHERE completed) AS completed_total,
+                COUNT(*) FILTER (WHERE completed AND exited_at >= :today) AS completed_today,
+                COUNT(*) FILTER (WHERE exited_at IS NULL AND NOT completed) AS currently_inside
+            FROM gate_visits
+        """), {"today": today_start})).one()
+
+        recent = (await db.execute(text("""
+            SELECT g.id, g.visitor_id, vis.name AS visitor_name,
+                   g.entry_camera_id, g.exit_camera_id,
+                   g.entered_at, g.exited_at, g.duration_seconds
+            FROM gate_visits g
+            LEFT JOIN visitors vis ON vis.id = g.visitor_id
+            WHERE g.completed
+            ORDER BY g.exited_at DESC NULLS LAST
+            LIMIT :limit
+        """), {"limit": max(1, limit)})).all()
+    except Exception:
+        # gate_visits table may not exist yet (pre-migration 012).
+        return empty
+
+    return {
+        "enabled": enabled,
+        "entry_camera_id": entry or None,
+        "exit_camera_id": exit_ or None,
+        "currently_inside": int(counts.currently_inside or 0),
+        "completed_today": int(counts.completed_today or 0),
+        "completed_total": int(counts.completed_total or 0),
+        "recent_passes": [
+            {
+                "id": str(r.id),
+                "visitor_id": str(r.visitor_id),
+                "visitor_name": r.visitor_name,
+                "entry_camera_id": r.entry_camera_id,
+                "exit_camera_id": r.exit_camera_id,
+                "entered_at": r.entered_at.isoformat() if r.entered_at else None,
+                "exited_at": r.exited_at.isoformat() if r.exited_at else None,
+                "duration_seconds": r.duration_seconds,
+            }
+            for r in recent
+        ],
+    }

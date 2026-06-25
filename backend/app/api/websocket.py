@@ -9,6 +9,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
 from app.config import settings
 from app.services.camera_service import CameraService
 from app.services.visit_tracker import VisitTracker
+from app.services.gate_tracker import GateVisitTracker
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,7 @@ async def live_feed(websocket: WebSocket):
 
     cam = CameraService.get_instance()
     tracker = VisitTracker.get_instance()
+    gate_tracker = GateVisitTracker.get_instance()
     interval = 1.0 / max(cam.fps or settings.CAMERA_FPS, 0.5)
 
     try:
@@ -43,6 +45,7 @@ async def live_feed(websocket: WebSocket):
                 "type": "frame",
                 "is_running": cam.is_running,
                 "currently_inside": tracker.current_inside_count(),
+                "gate_inside": gate_tracker.currently_inside(),
                 "stats": cam.stats,
                 "frame": (
                     "data:image/jpeg;base64," + base64.b64encode(jpeg).decode("ascii")

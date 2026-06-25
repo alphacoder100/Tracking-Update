@@ -48,6 +48,7 @@ from app.models import Visit, Visitor
 from app.schemas import HealthResponse
 from app.services.camera_manager import CameraManager, parse_cameras_config
 from app.services.visit_tracker import VisitTracker
+from app.services.gate_tracker import GateVisitTracker
 
 logging.basicConfig(
     level=logging.INFO,
@@ -59,13 +60,16 @@ _background_tasks: set = set()
 
 
 async def _stale_visit_loop():
-    """Periodically close visits idle past the cooldown / open past the max cap."""
+    """Periodically close visits idle past the cooldown / open past the max cap,
+    and abandon gate passes whose exit was never seen."""
     tracker = VisitTracker.get_instance()
+    gate_tracker = GateVisitTracker.get_instance()
     while True:
         await asyncio.sleep(settings.STALE_CHECK_INTERVAL_SECONDS)
         try:
             async with AsyncSessionLocal() as db:
                 await tracker.cleanup_stale(db)
+                await gate_tracker.cleanup_stale(db)
         except Exception as exc:
             logger.warning("Stale-visit cleanup failed: %s", exc)
 
@@ -165,6 +169,7 @@ async def lifespan(app: FastAPI):
     # Recover any visits left open by a previous run.
     async with AsyncSessionLocal() as db:
         await VisitTracker.get_instance().recover_active(db)
+        await GateVisitTracker.get_instance().recover_open(db)
 
     _spawn(_stale_visit_loop())
     _spawn(_retention_loop())

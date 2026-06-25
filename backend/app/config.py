@@ -116,6 +116,28 @@ class Settings(BaseSettings):
     # Background task cadence for closing stale visits.
     STALE_CHECK_INTERVAL_SECONDS: int = 60
 
+    # ── Entry/Exit gate counting (two-camera directional visits) ──
+    # A SEPARATE, additive counter from the cooldown-based visit tracker above.
+    # When enabled, a "gate visit" is one entry→exit pass: the SAME recognized
+    # visitor seen on ENTRY_CAMERA_ID and later on EXIT_CAMERA_ID. Linking the
+    # person across the two cameras relies on cross-camera face re-ID, so set
+    # CROSS_CAMERA_ENABLED=True as well (the dashboard surfaces this). State is
+    # in-process, so run a SINGLE worker (same constraint as the visit tracker).
+    GATE_COUNTING_ENABLED: bool = False
+    # Which camera_id is the entrance and which is the exit. Empty = unset; gate
+    # counting stays inert until both are configured and differ.
+    ENTRY_CAMERA_ID: str = ""
+    EXIT_CAMERA_ID: str = ""
+    # Minimum seconds between the entry sighting and the exit sighting for a pass
+    # to count (filters someone lingering in view of both cameras at once). 0 = none.
+    GATE_MIN_DWELL_SECONDS: float = 0.0
+    # An open pass with no exit after this many seconds is abandoned (not counted)
+    # so memory stays bounded and a much-later exit can't complete a stale entry.
+    GATE_MAX_DWELL_SECONDS: float = 14400.0  # 4 hours
+    # Whether an exit sighting with no prior open entry is ignored (True) — i.e. a
+    # completed visit requires entry first. False is reserved for future use.
+    GATE_REQUIRE_ENTRY_FIRST: bool = True
+
     # ── Camera service ───────────────────────────────────────
     # "0" = first USB webcam, "rtsp://..." = IP camera, "/path/to.mp4" = file.
     CAMERA_SOURCE: str = "0"

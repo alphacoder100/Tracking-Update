@@ -70,6 +70,15 @@ _PATCHABLE = {
     "CROSS_CAMERA_REVIEW_THRESHOLD",
     "CROSS_CAMERA_AUTO_THRESHOLD",
     "CROSS_CAMERA_AUTO_MERGE_THRESHOLD",
+    # ── Entry/Exit gate counting (two-camera directional visits) ──
+    # ENTRY_CAMERA_ID / EXIT_CAMERA_ID are free-form camera ids (set from the
+    # dashboard Gate card), so they're patchable strings with no fixed enum.
+    "GATE_COUNTING_ENABLED",
+    "ENTRY_CAMERA_ID",
+    "EXIT_CAMERA_ID",
+    "GATE_MIN_DWELL_SECONDS",
+    "GATE_MAX_DWELL_SECONDS",
+    "GATE_REQUIRE_ENTRY_FIRST",
 }
 
 # String-enum settings: restrict patch values to a known set.
@@ -91,6 +100,11 @@ class SettingsPatch(BaseModel):
                 raise ValueError(
                     f"{key} must be one of {sorted(choices)}; got {self.updates[key]!r}"
                 )
+        # Entry and exit cameras must differ when both are provided in the patch.
+        entry = self.updates.get("ENTRY_CAMERA_ID")
+        exit_ = self.updates.get("EXIT_CAMERA_ID")
+        if entry and exit_ and str(entry).strip() == str(exit_).strip():
+            raise ValueError("ENTRY_CAMERA_ID and EXIT_CAMERA_ID must differ.")
         return self
 
 

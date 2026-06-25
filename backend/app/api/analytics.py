@@ -89,3 +89,12 @@ async def analytics_pipeline_quality(
 ):
     """Decision-pipeline health: grey-zone / ambiguous rates + recovery counts."""
     return await analytics_service.pipeline_quality(db, since, until)
+
+
+@router.get("/gate")
+async def analytics_gate(
+    db: AsyncSession = Depends(get_db),
+    _key: str = Security(verify_api_key),
+):
+    """Entry→exit gate counting status + completed-visit counts (two-camera)."""
+    return await analytics_service.gate_stats(db)

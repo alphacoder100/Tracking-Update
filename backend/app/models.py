@@ -248,3 +248,41 @@ class VisitorMergeAudit(Base):
     __table_args__ = (
         Index("idx_merge_audit_target", target_visitor_id),
     )
+
+
+class GateVisit(Base):
+    """A directional entry→exit pass for a visitor (two-camera gate counting).
+
+    Opened when a recognized visitor is seen on the configured ENTRY camera and
+    closed (``completed=True``) when the SAME visitor is later seen on the EXIT
+    camera. Independent of the cooldown-based ``visits`` table so existing visit
+    analytics are unaffected. An abandoned pass (entered but no exit within the
+    max-dwell window) has ``exited_at`` set with ``completed=False``. See
+    services/gate_tracker.py.
+    """
+
+    __tablename__ = "gate_visits"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    visitor_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("visitors.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    entry_camera_id = Column(Text, nullable=True)
+    exit_camera_id = Column(Text, nullable=True)
+
+    entered_at = Column(DateTime(timezone=True), nullable=False, default=utcnow)
+    exited_at = Column(DateTime(timezone=True), nullable=True)  # NULL = still open
+    duration_seconds = Column(Integer, nullable=True)
+    completed = Column(Boolean, nullable=False, default=False)
+
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+
+    __table_args__ = (
+        Index("idx_gate_visits_visitor", visitor_id),
+        Index("idx_gate_visits_entered", entered_at.desc()),
+        Index("idx_gate_visits_open", exited_at, postgresql_where=(exited_at.is_(None))),
+        Index("idx_gate_visits_completed", completed, exited_at),
+    )

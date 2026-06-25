@@ -205,6 +205,28 @@ export interface DetectionQuality {
   total_detections: number;
 }
 
+// Entry→exit gate counting (from GET /api/analytics/gate).
+export interface GatePass {
+  id: string;
+  visitor_id: string;
+  visitor_name: string | null;
+  entry_camera_id: string | null;
+  exit_camera_id: string | null;
+  entered_at: string;
+  exited_at: string | null;
+  duration_seconds: number | null;
+}
+
+export interface GateStats {
+  enabled: boolean;
+  entry_camera_id: string | null;
+  exit_camera_id: string | null;
+  currently_inside: number;
+  completed_today: number;
+  completed_total: number;
+  recent_passes: GatePass[];
+}
+
 // Runtime-editable admin settings (from GET/PATCH /api/admin/settings).
 export type AdminSettings = Record<string, number | boolean | string>;
 
@@ -231,6 +253,7 @@ export interface LiveFeedMessage {
   type: string;
   is_running: boolean;
   currently_inside: number;
+  gate_inside?: number;
   stats: {
     frames_processed: number;
     frames_skipped: number;

@@ -18,6 +18,7 @@ import {
   Skeleton,
   Toggle,
 } from "@/components/ui";
+import { GateConfig } from "@/components/gate-config";
 
 // Group runtime-patchable keys into sections for a readable form.
 const GROUPS: { title: string; keys: string[] }[] = [
@@ -298,6 +299,8 @@ export default function SettingsPage() {
       </div>
 
       <DeviceCard />
+
+      <GateConfig />
 
       {error ? (
         <ErrorState message="Could not load admin settings. Is ADMIN_API_KEY configured?" />
