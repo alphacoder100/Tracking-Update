@@ -1,12 +1,12 @@
-# Graph Report - .  (2026-06-17)
+# Graph Report - .  (2026-06-26)
 
 ## Corpus Check
-- 80 files · ~66,991 words
+- 122 files · ~187,998 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 856 nodes · 1362 edges · 70 communities (50 shown, 20 thin omitted)
-- Extraction: 88% EXTRACTED · 12% INFERRED · 0% AMBIGUOUS · INFERRED: 158 edges (avg confidence: 0.77)
+- 314 nodes · 305 edges · 88 communities (17 shown, 71 thin omitted)
+- Extraction: 74% EXTRACTED · 25% INFERRED · 1% AMBIGUOUS · INFERRED: 77 edges (avg confidence: 0.89)
 - Token cost: 0 input · 0 output
 
 ## Community Hubs (Navigation)
@@ -71,246 +71,203 @@
 - [[_COMMUNITY_Community 58|Community 58]]
 - [[_COMMUNITY_Community 59|Community 59]]
 - [[_COMMUNITY_Community 60|Community 60]]
+- [[_COMMUNITY_Community 61|Community 61]]
 - [[_COMMUNITY_Community 62|Community 62]]
 - [[_COMMUNITY_Community 63|Community 63]]
+- [[_COMMUNITY_Community 64|Community 64]]
+- [[_COMMUNITY_Community 65|Community 65]]
 - [[_COMMUNITY_Community 66|Community 66]]
 - [[_COMMUNITY_Community 67|Community 67]]
 - [[_COMMUNITY_Community 68|Community 68]]
 - [[_COMMUNITY_Community 69|Community 69]]
+- [[_COMMUNITY_Community 70|Community 70]]
+- [[_COMMUNITY_Community 71|Community 71]]
+- [[_COMMUNITY_Community 72|Community 72]]
+- [[_COMMUNITY_Community 73|Community 73]]
+- [[_COMMUNITY_Community 74|Community 74]]
+- [[_COMMUNITY_Community 75|Community 75]]
+- [[_COMMUNITY_Community 76|Community 76]]
+- [[_COMMUNITY_Community 77|Community 77]]
+- [[_COMMUNITY_Community 78|Community 78]]
+- [[_COMMUNITY_Community 79|Community 79]]
+- [[_COMMUNITY_Community 80|Community 80]]
+- [[_COMMUNITY_Community 81|Community 81]]
+- [[_COMMUNITY_Community 82|Community 82]]
+- [[_COMMUNITY_Community 83|Community 83]]
+- [[_COMMUNITY_Community 84|Community 84]]
+- [[_COMMUNITY_Community 85|Community 85]]
+- [[_COMMUNITY_Community 86|Community 86]]
+- [[_COMMUNITY_Community 87|Community 87]]
 
 ## God Nodes (most connected - your core abstractions)
-1. `ModelManager` - 23 edges
-2. `CameraService` - 19 edges
-3. `FastAPI Backend` - 19 edges
-4. `OSNet` - 13 edges
-5. `Visit Session Tracker` - 13 edges
-6. `Visitor` - 12 edges
-7. `VisitTracker` - 12 edges
-8. `fetcher()` - 12 edges
-9. `Visitor (ORM Model)` - 12 edges
-10. `FaceEmbeddingCache` - 11 edges
+1. `Visitor (ORM Model)` - 12 edges
+2. `Face Crop 25cff750` - 10 edges
+3. `Visitor 7eca5017-112f-45c7-a132-1acf7c7ddaff` - 10 edges
+4. `process_frame (CV Pipeline)` - 9 edges
+5. `VisitTracker` - 9 edges
+6. `CameraService` - 8 edges
+7. `Backend Python Requirements` - 7 edges
+8. `ModelManager` - 7 edges
+9. `process_detections Function` - 7 edges
+10. `Settings (App Config)` - 6 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `Visit Session Tracker` --shares_data_with--> `Visits Table`  [EXTRACTED]
-  backend/app/services/visit_tracker.py → ULTIMATE_RESTAURANT_TRACKER_PLAN.md
-- `Identity Resolution Service` --references--> `pgvector HNSW Index`  [EXTRACTED]
-  backend/app/services/identity_resolver.py → ULTIMATE_RESTAURANT_TRACKER_PLAN.md
-- `Identity Resolution Service` --rationale_for--> `Ambiguity Margin Detection`  [EXTRACTED]
-  backend/app/services/identity_resolver.py → ULTIMATE_RESTAURANT_TRACKER_PLAN.md
-- `Identity Resolution Service` --rationale_for--> `Body Fallback Disabled By Default`  [EXTRACTED]
-  backend/app/services/identity_resolver.py → ULTIMATE_RESTAURANT_TRACKER_PLAN.md
-- `Visit Session Tracker` --rationale_for--> `Single Worker Requirement`  [EXTRACTED]
-  backend/app/services/visit_tracker.py → README.md
+- `Fused-Score Re-Ranking of Candidates` --semantically_similar_to--> `Offline / Nightly Global Deduplication`  [INFERRED] [semantically similar]
+  IMPROVEMENT_PLAN.md → ADVANCED_OPTIMIZATION_AND_DEDUPLICATION_PLAN.md
+- `HNSW ef_search Tuning` --implements--> `pgvector Extension`  [EXTRACTED]
+  IMPROVEMENT_PLAN.md → backend/requirements.txt
+- `Tracklet Fast-Path` --implements--> `Tracklet-Based Identity Resolution`  [INFERRED]
+  IMPROVEMENT_PLAN.md → ADVANCED_OPTIMIZATION_AND_DEDUPLICATION_PLAN.md
+- `Restaurant Tracker Dashboard` --conceptually_related_to--> `Restaurant Visitor Tracker`  [INFERRED]
+  dashboard/README.md → README.md
+- `Backend Service` --implements--> `Restaurant Visitor Tracker`  [INFERRED]
+  docker-compose.yml → README.md
 
-## Communities (70 total, 20 thin omitted)
+## Import Cycles
+- None detected.
+
+## Hyperedges (group relationships)
+- **Part 1: Implemented Improvements** — IMPROVEMENT_hnsw_ef_search_tuning, IMPROVEMENT_per_person_arcface_fallback_gating, IMPROVEMENT_empty_frame_early_out, IMPROVEMENT_tracklet_fast_path [EXTRACTED 1.00]
+- **Part 2: Recommended Next Steps** — IMPROVEMENT_consolidate_per_match_db_round_trips, IMPROVEMENT_masked_face_periocular_batching, IMPROVEMENT_persist_ef_search_at_role_level, IMPROVEMENT_fused_score_reranking, IMPROVEMENT_detector_input_size_auto_selection, IMPROVEMENT_model_upgrades_evaluate [EXTRACTED 1.00]
+- **Backend CV/ML Dependency Stack** — CONCEPT_fastapi, CONCEPT_pgvector, CONCEPT_alembic, CONCEPT_insightface, CONCEPT_ultralytics, CONCEPT_onnxruntime, CONCEPT_imageio_ffmpeg [EXTRACTED 1.00]
+- **Phase 1: Body Re-ID Activation & Tuning** — ADVANCED_OPTIMIZATION_cross_camera_body_reid_fusion, CONCEPT_osnet, CONCEPT_arcface [EXTRACTED 1.00]
+- **Phase 2: Pose-Adaptive Thresholding** — ADVANCED_OPTIMIZATION_dynamic_pose_adaptive_thresholds, MODULE_identity_resolver [EXTRACTED 1.00]
+- **Phase 3: Nightly Auto-Dedup Sweep** — ADVANCED_OPTIMIZATION_offline_nightly_dedup, CONCEPT_dbscan [EXTRACTED 1.00]
+- **Phase 4: Tracklet Tracking** — ADVANCED_OPTIMIZATION_tracklet_based_identity_resolution, CONCEPT_bytetrack, MODULE_cv_pipeline [EXTRACTED 1.00]
+- **Part 1: Implemented Improvements** — IMPROVEMENT_hnsw_ef_search_tuning, IMPROVEMENT_per_person_arcface_fallback_gating, IMPROVEMENT_empty_frame_early_out, IMPROVEMENT_tracklet_fast_path [EXTRACTED 1.00]
+- **Part 2: Recommended Next Steps** — IMPROVEMENT_consolidate_per_match_db_round_trips, IMPROVEMENT_masked_face_periocular_batching, IMPROVEMENT_persist_ef_search_at_role_level, IMPROVEMENT_fused_score_reranking, IMPROVEMENT_detector_input_size_auto_selection, IMPROVEMENT_model_upgrades_evaluate [EXTRACTED 1.00]
+- **Backend CV/ML Dependency Stack** — CONCEPT_fastapi, CONCEPT_pgvector, CONCEPT_alembic, CONCEPT_insightface, CONCEPT_ultralytics, CONCEPT_onnxruntime, CONCEPT_imageio_ffmpeg [EXTRACTED 1.00]
+- **Multi-Angle Cross-Camera Deduplication Problem** — CONCEPT_arcface, CONCEPT_osnet, MODULE_temporal_consistency, ADVANCED_OPTIMIZATION_cross_camera_body_reid_fusion, ADVANCED_OPTIMIZATION_global_topology_aware_temporal_gate [EXTRACTED 1.00]
+- **Visitor 23d9b77b Image Set** — thumb_23d9b77b, face_0d2c0ab4, face_1d3ca575, face_312db595, face_521facf2 [EXTRACTED 1.00]
+- **Visitor 2585fb35 Image Set** — thumb_2585fb35, face_25cff750, face_4f1868d9, face_5955a59f, face_9d463039, face_9f93b419, face_b82c2b27, face_e6c15dc8, face_ee8e89a1, face_ef557b9a [EXTRACTED 1.00]
+- **Visitor 28956e92 Image Set** — thumb_28956e92, face_3b339be8 [EXTRACTED 1.00]
+- **Visitor 2cce5c68 Image Set** — thumb_2cce5c68, face_aba315b9 [EXTRACTED 1.00]
+- **Visitor 30e82cba Image Set** — thumb_30e82cba, face_1b609e91 [EXTRACTED 1.00]
+- **Visitor Record 5e78f87a** — visitor_5e78f87a, thumbnail_5e78f87a, face_151004ac [EXTRACTED 1.00]
+- **Visitor Record 6a5f15ea** — visitor_6a5f15ea, thumbnail_6a5f15ea, face_acdfd5b9 [EXTRACTED 1.00]
+- **Visitor Record 6dcedb01** — visitor_6dcedb01, thumbnail_6dcedb01, face_922735d4 [EXTRACTED 1.00]
+- **Visitor Record 71df3f5f** — visitor_71df3f5f, thumbnail_71df3f5f, face_8ff846b1 [EXTRACTED 1.00]
+- **Visitor Record 75cd70c2** — visitor_75cd70c2, thumbnail_75cd70c2, face_e59d66ac [EXTRACTED 1.00]
+- **Visitor Record 7eca5017 (multi-face)** — visitor_7eca5017, thumbnail_7eca5017, face_041bcb21, face_24c45fc0, face_40201a5e, face_71826cf2, face_9382d308, face_c1775149, face_d243d525, face_d61672e0 [EXTRACTED 1.00]
+- **Visitor Record 80a60a29** — visitor_80a60a29, thumbnail_80a60a29 [EXTRACTED 1.00]
+- **Restaurant Visitor Tracker Storage** — visitor_photos_root, visitor_5e78f87a, visitor_6a5f15ea, visitor_6dcedb01, visitor_71df3f5f, visitor_75cd70c2, visitor_7eca5017, visitor_80a60a29 [INFERRED 0.95]
+- **Visitor 93ddc0e9 Face Crop Set** — visitor_93ddc0e9, face_4e587999, face_681b84e6, face_745c3e2d, face_7b1769c9, face_c7baddbb, face_d05ecd65, face_d4f530f5, face_d6e59b56, face_dfd73107 [EXTRACTED 1.00]
+- **Visitor 9ebf00c2 Face Crop Set** — visitor_9ebf00c2, face_153ce3cb, face_1547db8d, face_159f54da, face_211a72e8, face_41817feb, face_83c80a06 [EXTRACTED 1.00]
+- **Visitor 82c8b743 Face Crop Set** — visitor_82c8b743, face_3c393903 [EXTRACTED 1.00]
+- **Visitor 80a60a29 Face Crop Set** — visitor_80a60a29, face_2b02c137 [EXTRACTED 1.00]
+- **Thumbnail-Face Association Group** — thumbnail_82c8b743, face_3c393903, thumbnail_93ddc0e9, face_d4f530f5, thumbnail_9ebf00c2, face_83c80a06 [INFERRED 0.85]
+- **Face crops of visitor 9ebf00c2** — visitor_9ebf00c2, face_b25eb548, face_d1433496, face_f4b51cdc, face_f8324e49 [EXTRACTED 1.00]
+- **Assets of visitor a0b171a0 (thumbnail + 6 face crops)** — visitor_a0b171a0, thumbnail_a0b171a0, face_1a3ddcc6, face_59c6adec, face_5c52d881, face_c952aa61, face_e4c6cfe2, face_e5d1e8fe [EXTRACTED 1.00]
+- **Assets of visitor a137a9b7 (thumbnail + 2 face crops)** — visitor_a137a9b7, thumbnail_a137a9b7, face_175ecdc4, face_583e1f5c [EXTRACTED 1.00]
+- **Assets of visitor a59df451 (thumbnail + 1 face crop)** — visitor_a59df451, thumbnail_a59df451, face_2cc848dc [EXTRACTED 1.00]
+- **Assets of visitor adab3bd6 (thumbnail + 1 face crop)** — visitor_adab3bd6, thumbnail_adab3bd6, face_8605f513 [EXTRACTED 1.00]
+- **Assets of visitor b23a1d59 (thumbnail + 1 face crop)** — visitor_b23a1d59, thumbnail_b23a1d59, face_3d2be4ff [EXTRACTED 1.00]
+- **Restaurant visitor tracking photo storage** — storage_visitor_photos, visitor_9ebf00c2, visitor_a0b171a0, visitor_a137a9b7, visitor_a59df451, visitor_adab3bd6, visitor_b23a1d59 [INFERRED 0.95]
+- **Visitor d40786dc with 3 face crops** — visitor_d40786dc, face_04e53627, face_353e15a6, face_48c74e29, thumb_d40786dc [EXTRACTED 1.00]
+- **Visitor d19343ef with 2 face crops** — visitor_d19343ef, face_7805560b, face_abd9a807, thumb_d19343ef [EXTRACTED 1.00]
+- **Visitor Photos Directory Structure (thumbnail + faces/)** — visitor_photos_dir, visitor_b838dfa6, visitor_ba64c5df, visitor_bcb7e754, visitor_c5b01d96, visitor_cbef84fb, visitor_d19343ef, visitor_d40786dc, visitor_d78a9155, visitor_e26bf9df [EXTRACTED 1.00]
+- **Visitor edc9f616 Photo Record** — visitor_edc9f616, face_b87fe9d2, face_d1403460 [EXTRACTED 1.00]
+- **Visitor f0fb49ef Photo Record** — visitor_f0fb49ef, thumb_f0fb49ef, face_910b687c [EXTRACTED 1.00]
+- **Visitor fc2e179d Photo Record** — visitor_fc2e179d, thumb_fc2e179d, face_82773ed9 [EXTRACTED 1.00]
+- **Restaurant Visitor Photo Storage System** — visitor_photos_dir, visitor_edc9f616, visitor_f0fb49ef, visitor_fc2e179d, thumb_f0fb49ef, thumb_fc2e179d, face_b87fe9d2, face_d1403460, face_910b687c, face_82773ed9 [INFERRED 0.95]
+
+## Communities (88 total, 71 thin omitted)
 
 ### Community 0 - "Community 0"
-Cohesion: 0.05
-Nodes (43): Base, Base class for all ORM models., DetectionEvent, SQLAlchemy ORM models with pgvector embedding columns.  Restaurant visitor tra, A single visit session for a visitor., Per-detection audit trail (one row per recognised/created detection)., A unique person seen by the system (auto-registered on first detection)., One face embedding in a visitor's multi-pose gallery. (+35 more)
+Cohesion: 0.07
+Nodes (34): ArcFace Face Recognition, OSNet Body Re-Identification, CPU-Only Inference, CameraService, Async Database Engine, DetectedPerson, FaceEmbeddingCache, Face Quality Gating (+26 more)
 
 ### Community 1 - "Community 1"
-Cohesion: 0.05
-Nodes (31): _device_status(), get_device(), Current device state + GPU capability for the dashboard., Report the active processing device and whether a CUDA GPU is usable., Switch processing between CPU and GPU live — reloads all models onto the new, set_device(), cuda_available(), filter_persons() (+23 more)
+Cohesion: 0.09
+Nodes (31): Face Crop 11fa4deb, Face Crop 2836135f, Face Crop 3173ebe2, Face Crop 4e98f23a, Face Crop 7805560b, Face Crop 82773ed9-1948-41b6-84f6-5fa8fd1d4a42, Face Crop 910b687c-b4f1-49d1-9656-16f0d61f79af, Face Crop abd9a807 (+23 more)
 
 ### Community 2 - "Community 2"
-Cohesion: 0.07
-Nodes (39): mark_staff(), merge_visitor(), Admin endpoints — merge duplicate visitors, mark staff., Merge `visitor_id` INTO target_visitor_id, then delete the source., delete_visitor(), get_visitor(), get_visitor_thumbnail(), get_visitor_visits() (+31 more)
+Cohesion: 0.10
+Nodes (22): Face crop 151004ac-b626-44ad-9f0e-36fd90c1f301, Face Crop 2b02c137-ecc7-410f-8480-29b9569b30fc, Face Crop 3c393903-6ef6-4e01-be3a-e1f8c9b269eb, Face crop 8ff846b1-1a14-4596-8a30-ce7a794ed767, Face crop 922735d4-6c2e-4eb6-9edd-e388555c8e14, Face crop acdfd5b9-a367-4e15-a37d-315aab73fad5, Face crop e59d66ac-56ec-4683-ae72-97bae8530469, Thumbnail 5e78f87a (+14 more)
 
 ### Community 3 - "Community 3"
-Cohesion: 0.07
-Nodes (22): ChannelGate, Conv1x1, Conv1x1Linear, Conv3x3, ConvLayer, LightConv3x3, OSBlock, OSNet (+14 more)
+Cohesion: 0.11
+Nodes (20): Face Crop 153ce3cb-b211-424b-89cd-e301e5ce9574, Face Crop 1547db8d-c3b0-41bc-a985-585ba0e21211, Face Crop 159f54da-bb8f-4950-b55a-b48609db7a48, Face crop 1a3ddcc6, Face Crop 211a72e8-d41f-4701-94a2-a6ab07627f19, Face Crop 41817feb-d940-4b9f-8a17-eaa617918421, Face crop 59c6adec, Face crop 5c52d881 (+12 more)
 
 ### Community 4 - "Community 4"
-Cohesion: 0.09
-Nodes (31): camera_status(), camera_stream(), Camera control endpoints., Live MJPEG push stream (multipart/x-mixed-replace). Frames are pushed to the, start_camera(), ActivityEvent, ActivityResponse, AnalyticsSummary (+23 more)
+Cohesion: 0.15
+Nodes (19): ActiveVisit, Adaptive Centroid Learning, DetectionEvent (ORM Model), Multi-Pose Face Gallery, HNSW Vector Indexes, Visit (ORM Model), VisitTracker, Visit Session Tracking (+11 more)
 
 ### Community 5 - "Community 5"
-Cohesion: 0.09
-Nodes (28): _compute_iou(), DetectedPerson, estimate_pose(), face_passes_quality(), FacePose, _is_group_frame(), PoseBin, process_frame() (+20 more)
+Cohesion: 0.12
+Nodes (18): Advanced Optimization & Deduplication Plan (Multi-Angle Focus), Cross-Camera Body Re-ID Fusion (Session Linking), Dynamic Pose-Adaptive Thresholds, Offline / Nightly Global Deduplication, Tracklet-Based Identity Resolution, ArcFace Face Embeddings, ByteTrack Tracker, DBSCAN Clustering (+10 more)
 
 ### Community 6 - "Community 6"
-Cohesion: 0.09
-Nodes (28): app_cv_pipeline, app_utils, cv2, numpy, pathlib, add_face_to_gallery(), _add_gallery_face(), _delete_gallery_face() (+20 more)
+Cohesion: 0.14
+Nodes (14): Backend Python Requirements, Alembic Migrations, FastAPI Web Framework, HNSW Vector Index (pgvector), imageio-ffmpeg (bundled FFmpeg 7.x), InsightFace, ONNX Runtime, pgvector Extension (+6 more)
 
 ### Community 7 - "Community 7"
-Cohesion: 0.11
-Nodes (18): Filter, BadgeTone, Button(), buttonClasses, ButtonVariant, Card(), EmptyState(), ErrorState() (+10 more)
+Cohesion: 0.16
+Nodes (14): Face crop 175ecdc4, Face crop 2cc848dc, Face crop 3d2be4ff, Face crop 583e1f5c, Face crop 8605f513, Visitor Photos Storage Directory, Thumbnail a137a9b7, Thumbnail a59df451 (+6 more)
 
 ### Community 8 - "Community 8"
-Cohesion: 0.1
-Nodes (25): ArcFace Face Recognition, Active Visit Dataclass, Activity Feed Component, Activity Page, Analytics Page, Analytics API, Analytics Service, API Fetcher Utility (+17 more)
+Cohesion: 0.35
+Nodes (11): Face Crop 25cff750, Face Crop 4f1868d9, Face Crop 5955a59f, Face Crop 9d463039, Face Crop 9f93b419, Face Crop b82c2b27, Face Crop e6c15dc8, Face Crop ee8e89a1 (+3 more)
 
 ### Community 9 - "Community 9"
-Cohesion: 0.11
-Nodes (21): Recharts Charting Library, AnalyticsPage(), RangeKey, sinceFor(), DailyVisitsArea(), DetectionQualityBar(), DONUT_COLORS, FrequencyBar() (+13 more)
+Cohesion: 0.20
+Nodes (11): Face Crop 4e587999-b39a-4c23-91dc-aec63dcbe054, Face Crop 681b84e6-78ad-4637-9bc2-1d3bc948c962, Face Crop 745c3e2d-75a7-409f-9b94-786f037b1f65, Face Crop 7b1769c9-937f-4289-a1a8-528c333d2664, Face Crop c7baddbb-7dd4-4cbd-8148-5c54338a1704, Face Crop d05ecd65-8c08-4e67-a41f-a1fb22ee1ec9, Face Crop d4f530f5-df42-4a92-a314-502f02d448a7, Face Crop d6e59b56-b6a7-4eb2-a91c-00bb1f9cb716 (+3 more)
 
 ### Community 10 - "Community 10"
-Cohesion: 0.11
-Nodes (18): get_db(), init_db(), Async SQLAlchemy engine and session factory for PostgreSQL + asyncpg., FastAPI dependency that yields an async database session., Ensure pgvector extension is enabled (called on startup)., _auto_tuning_loop(), lifespan(), FastAPI application — Restaurant Visitor Tracker.  Detects persons via webcam/ (+10 more)
+Cohesion: 0.38
+Nodes (10): Face crop 041bcb21-e582-4e7a-83c7-0f95723480c0, Face crop 24c45fc0-dbb2-4abf-850b-466b7f4b54b6, Face crop 40201a5e-dcb0-4779-beb3-2f0b24c74bd3, Face crop 71826cf2-9142-4748-8093-597049659669, Face crop 9382d308-b62e-4449-9b61-b4ea10f6532d, Face crop c1775149-7eb4-4b45-a5ad-6bd2b79ef8a2, Face crop d243d525-54bc-4df5-a44f-c29d5bcae423, Face crop d61672e0-f72d-49da-9d97-0a21c018fc67 (+2 more)
 
 ### Community 11 - "Community 11"
-Cohesion: 0.24
-Nodes (20): API Client Library, Activity Feed Component, Activity Timeline Page, Analytics Dashboard Page, Camera Management Page, Charts Component, Formatting Utilities, Live Feed Component (+12 more)
+Cohesion: 0.22
+Nodes (9): Face Crop 1b609e91, Face Crop 3b339be8, Face Crop aba315b9, Visitor 28956e92 Thumbnail, Visitor 2cce5c68 Thumbnail, Visitor 30e82cba Thumbnail, Visitor 28956e92-aaab-48fe-9552-f086fffe6b28, Visitor 2cce5c68-4a71-4356-987d-f46b7d878b35 (+1 more)
 
 ### Community 12 - "Community 12"
-Cohesion: 0.15
-Nodes (14): Badge(), VisitorTable(), CONSENT_LABEL, CONSENT_TONE, monthlyBuckets(), VisitorProfilePage(), formatDateTime(), formatTime() (+6 more)
+Cohesion: 0.60
+Nodes (6): Face Crop 0d2c0ab4, Face Crop 1d3ca575, Face Crop 312db595, Face Crop 521facf2, Visitor 23d9b77b Thumbnail, Visitor 23d9b77b-5a28-4107-9214-f1d216b9df45
 
 ### Community 13 - "Community 13"
-Cohesion: 0.14
-Nodes (20): ActiveVisit, Adaptive Centroid Learning, DetectionEvent (ORM Model), Multi-Pose Face Gallery, HNSW Vector Indexes, Single Worker Requirement, Visit (ORM Model), Visit Session Tracker (+12 more)
+Cohesion: 0.60
+Nodes (5): Upgrade Feature Extractors (Future-Proofing), AdaFace Pose-Invariant Face Recognition, BoT-SORT Tracker, StrongSORT Tracker, Model Upgrades (Evaluate, Don't Rush)
 
 ### Community 14 - "Community 14"
-Cohesion: 0.14
-Nodes (17): app_config, app_models, app_services_visit_tracker, datetime, logging, flag_ambiguous_visitor(), flag_opted_out_match(), _insert_flag() (+9 more)
+Cohesion: 0.70
+Nodes (5): Face Crop 04e53627, Face Crop 353e15a6, Face Crop 48c74e29, Visitor Thumbnail d40786dc, Visitor d40786dc
 
 ### Community 15 - "Community 15"
-Cohesion: 0.2
-Nodes (10): ActivityFeed(), DetectionFeed(), CardTitle(), PageHeader(), api, ApiError, fetcher(), request() (+2 more)
+Cohesion: 0.50
+Nodes (4): Restaurant Tracker Dashboard, Backend Service, Dashboard Service, Restaurant Visitor Tracker
 
 ### Community 16 - "Community 16"
-Cohesion: 0.12
-Nodes (14): DevicePatch, get_settings(), patch_settings(), Runtime configuration API — change thresholds without restarting the server., Reload persisted settings from the runtime_settings table (if present)., Reload persisted settings from the runtime_settings table (if present)., Return current runtime values for all patchable settings., Update one or more runtime settings in-process (survives until next restart). (+6 more)
+Cohesion: 1.00
+Nodes (3): Face Crop e2e5a891, Visitor Thumbnail bcb7e754, Visitor bcb7e754
 
-### Community 17 - "Community 17"
-Cohesion: 0.14
-Nodes (15): apply_clahe(), apply_gamma_correction(), cap_frame_long_side(), cv_image_to_base64(), encode_jpeg(), _extract_video_frames_from_path(), preprocess_face_for_recognition(), Image and video utility functions. (+7 more)
-
-### Community 18 - "Community 18"
-Cohesion: 0.16
-Nodes (8): CameraService, _parse_source(), Fresh synchronization primitives + counters for a new run., Spawn capture + inference workers + consumer; tear them all down together., Continuously grab frames, keeping only the newest (drops backlog)., Post-process inference results: ROI filter, DB write, and publish the         d, 0' → int 0 (webcam index); anything else stays a string (URL/path)., Singleton background camera processor.
-
-### Community 19 - "Community 19"
-Cohesion: 0.19
-Nodes (14): Ambiguity Margin Detection, Analytics Service, Auto-Enrollment Service, Body Fallback Disabled By Default, Detection Pipeline Service, FastAPI Backend, pgvector HNSW Index, Identity Resolution Service (+6 more)
-
-### Community 20 - "Community 20"
-Cohesion: 0.16
-Nodes (11): NAV, AnalyticsSummary, BoundingBox, ConfidenceWeighted, DetectionItem, DetectResponse, HealthResponse, LiveFeedMessage (+3 more)
-
-### Community 21 - "Community 21"
-Cohesion: 0.14
-Nodes (11): c_users_jana_bishwanath_desktop_person_tracking_tracking_update_dashboard_components_ui_tsx, c_users_jana_bishwanath_desktop_person_tracking_tracking_update_dashboard_lib_api_ts, c_users_jana_bishwanath_desktop_person_tracking_tracking_update_dashboard_lib_format_ts, c_users_jana_bishwanath_desktop_person_tracking_tracking_update_dashboard_lib_types_ts, link, lucide_react, react, FLAG_META (+3 more)
-
-### Community 22 - "Community 22"
-Cohesion: 0.18
-Nodes (14): ArcFace Face Recognition, CPU-Only Inference, Camera Service, FaceEmbeddingCache, FastAPI Application, Frame Deduplication, ModelManager, OSNet Body Re-identification (+6 more)
-
-### Community 23 - "Community 23"
-Cohesion: 0.18
-Nodes (7): _bbox_center_distance(), _cosine_sim(), Temporal consistency gate.  Prevents same-person fragmentation: if a "new" det, Remove all entries for a visitor (e.g. after opt-out)., Record a confirmed detection., Return visitor_id if this 'new' detection looks like a recently seen         vi, TemporalConsistencyGate
-
-### Community 24 - "Community 24"
-Cohesion: 0.19
-Nodes (12): extract_periocular_region(), is_masked(), _lower_face_brightness(), _lower_std(), masked_threshold_offset(), Mask detection via periocular heuristic.  When the lower face (nose+mouth regi, Mean pixel value of the lower 40% of the face crop (nose-mouth zone)., Std-dev of the upper 40% of the face crop (forehead-eye zone). (+4 more)
-
-### Community 25 - "Community 25"
-Cohesion: 0.17
-Nodes (12): Upload a video file and start streaming it through the detection pipeline., upload_video_stream(), detect(), Detect, auto-register, and recognise visitors in an uploaded image/video., extract_video_frames(), file_to_cv_image(), is_video_upload(), Extract frames from an uploaded video file at the configured FPS rate. (+4 more)
-
-### Community 26 - "Community 26"
-Cohesion: 0.27
-Nodes (9): confidence_weighted_summary(), detection_quality_report(), frequency(), hourly(), _range(), Analytics query builders. Staff and soft-deleted visitors are excluded. Confide, Like summary() but weights each detection by face_similarity so that     low-co, Breakdown of detection quality bands to surface systematic issues.     Bands: h (+1 more)
-
-### Community 27 - "Community 27"
-Cohesion: 0.2
-Nodes (8): Config, Application configuration via pydantic-settings. All values read from environme, Settings, BaseSettings, json, pydantic, pydantic_settings, typing
-
-### Community 28 - "Community 28"
-Cohesion: 0.2
-Nodes (10): auto_merge_review_duplicates(), Merge all probable-duplicate flags into their matched visitor (global dedup)., Merge probable-duplicate flags above a confidence floor into their matched, Rebuild a visitor's face (and body) centroid from its current gallery faces,, recompute_centroid_from_gallery(), auto_merge_duplicates(), Global one-click dedup: merge every unresolved `probable_duplicate` into the, Global one-click dedup: merge every unresolved `probable_duplicate` whose     r (+2 more)
-
-### Community 29 - "Community 29"
-Cohesion: 0.24
-Nodes (8): CameraPage(), VisitorAvatar(), imageUrl(), uptime(), RegionOfInterest, RoiResponse, VisitorListResponse, ComparePhoto()
-
-### Community 30 - "Community 30"
-Cohesion: 0.22
-Nodes (10): OSNet Body Re-Identification, DetectedPerson, Face Quality Gating, YOLOv8 Person Detection, compute_dhash Utility, POST /api/detect, normalize_embedding Utility, process_detections Function (+2 more)
-
-### Community 31 - "Community 31"
-Cohesion: 0.25
-Nodes (7): Alembic environment configuration for async migrations., Run migrations in 'offline' mode., Run migrations in 'online' mode with async engine., Run migrations in 'online' mode., run_async_migrations(), run_migrations_offline(), run_migrations_online()
-
-### Community 32 - "Community 32"
-Cohesion: 0.22
-Nodes (4): analytics_confidence_weighted(), analytics_detection_quality(), Summary with confidence-weighted unique visitor count., Detection quality band breakdown (high / medium / low confidence).
-
-### Community 33 - "Community 33"
-Cohesion: 0.36
-Nodes (8): BACKEND_URL, Ctx, DELETE(), forward(), GET(), PATCH(), POST(), PUT()
-
-### Community 34 - "Community 34"
-Cohesion: 0.22
-Nodes (7): frame_signature(), frames_are_similar(), Cheap perceptual fingerprint of a frame (small grayscale thumbnail)., True if two frame signatures differ by less than `threshold` (mean abs diff)., Block until a frame newer than the last claimed one exists, then take         i, Pull the newest frame and run the CV pipeline off the event loop.          Whe, _roi_crop()
-
-### Community 35 - "Community 35"
-Cohesion: 0.25
-Nodes (8): Async Database Engine, Identity Resolution Strategy, Settings (App Config), Database Session Dependency, pgvector Extension, resolve_batch Function, Settings API, API Key Verification
-
-### Community 36 - "Community 36"
-Cohesion: 0.29
-Nodes (6): _bbox_center_in_roi(), _filter_by_roi(), _offset_detections(), Camera service — background webcam/RTSP/file processor.  Two execution modes (, Check if the center of a detection bbox falls within the ROI., Keep only detections whose *drawn* box falls inside the ROI.      The label is
-
-### Community 37 - "Community 37"
-Cohesion: 0.32
-Nodes (5): draw_detections(), Draw labelled bounding boxes for the live feed.      annotations: list of {bbo, Encode the latest captured frame at a steady preview rate, overlaying         t, Visualize the detection zone on a frame (in place): dim everything         outs, _sleep_remaining()
-
-### Community 38 - "Community 38"
-Cohesion: 0.36
-Nodes (6): _bounds(), _months(), _partition_name(), Monthly partitioning of detection_events (range on detected_at).  This migrati, Yield (year, month) for n consecutive months starting at start., upgrade()
-
-### Community 39 - "Community 39"
-Cohesion: 0.33
-Nodes (6): Mark a review flag as resolved., Mark a review flag as resolved., resolve_review_flag(), Mark a review flag as resolved., Mark a review flag as resolved., resolve_flag()
-
-### Community 40 - "Community 40"
-Cohesion: 0.33
-Nodes (6): clean_visitor_faces(), Auto-remove unclear faces from a visitor's gallery (clarity-based pruning)., Auto-remove unclear faces from a visitor's gallery (clarity-based pruning)., clean_visitor_gallery(), Score every gallery face for clarity (landmark frontality + blur + det_score), Score every gallery face for clarity (landmark frontality + blur + det_score)
-
-### Community 41 - "Community 41"
-Cohesion: 0.33
-Nodes (5): API routers and shared dependencies., Validate the X-API-Key header against the configured key., Validate against ADMIN_API_KEY (falls back to API_KEY when admin key not set)., verify_admin_api_key(), verify_api_key()
-
-### Community 42 - "Community 42"
-Cohesion: 0.4
-Nodes (5): compute_clarity(), Face clarity scoring — "is this face clearly visible?".  Combines three cheap,, Laplacian-variance sharpness normalized to [0, 1]; None if no crop., Return clarity sub-scores and a combined score in [0, 1].      With a crop ava, sharpness_score()
-
-### Community 43 - "Community 43"
-Cohesion: 0.4
-Nodes (3): inter, metadata, Sidebar()
-
-### Community 44 - "Community 44"
-Cohesion: 0.5
-Nodes (4): get_review_queue(), Return unresolved human-review flags., get_pending_flags(), Return unresolved flags for the admin UI.
-
-### Community 48 - "Community 48"
-Cohesion: 0.5
-Nodes (3): list_activity(), Activity feed — recent detection events for the dashboard timeline., Most-recent detection events, newest first, with visitor info joined.
-
-### Community 49 - "Community 49"
-Cohesion: 0.5
-Nodes (3): live_feed(), WebSocket /ws/live-feed — streams annotated frames + live stats., Push the latest annotated frame and live stats at the camera FPS.
+## Ambiguous Edges - Review These
+- `Face crop 041bcb21-e582-4e7a-83c7-0f95723480c0` → `Face crop d61672e0-f72d-49da-9d97-0a21c018fc67`  [AMBIGUOUS]
+  backend/storage/visitor_photos/7eca5017-112f-45c7-a132-1acf7c7ddaff · relation: semantically_similar_to
+- `Visitor 93ddc0e9-45ab-4d95-94f2-4f60b94dff34` → `Visitor 9ebf00c2-24eb-469d-870c-058d9a2d3454`  [AMBIGUOUS]
+  backend/storage/visitor_photos/ · relation: conceptually_related_to
+- `Visitor 9ebf00c2-24eb-469d-870c-058d9a2d3454` → `Thumbnail a0b171a0`  [AMBIGUOUS]
+  backend/storage/visitor_photos/9ebf00c2-24eb-469d-870c-058d9a2d3454 · relation: conceptually_related_to
 
 ## Knowledge Gaps
-- **276 isolated node(s):** `Test camera indices 0 to max_index-1`, `Alembic environment configuration for async migrations.`, `Run migrations in 'offline' mode.`, `Run migrations in 'online' mode with async engine.`, `Run migrations in 'online' mode.` (+271 more)
+- **145 isolated node(s):** `GET`, `POST`, `PUT`, `PATCH`, `DELETE` (+140 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **20 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **71 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `request()` connect `Community 15` to `Community 1`?**
-  _High betweenness centrality (0.254) - this node is a cross-community bridge._
-- **Why does `FastAPI Backend` connect `Community 19` to `Community 32`, `Community 2`, `Community 4`, `Community 41`, `Community 10`, `Community 13`, `Community 48`, `Community 17`, `Community 16`, `Community 49`, `Community 22`, `Community 55`?**
-  _High betweenness centrality (0.240) - this node is a cross-community bridge._
-- **Why does `ModelManager` connect `Community 1` to `Community 16`, `Community 5`?**
-  _High betweenness centrality (0.128) - this node is a cross-community bridge._
-- **Are the 33 inferred relationships involving `str` (e.g. with `._load_yolo()` and `._load_osnet()`) actually correct?**
-  _`str` has 33 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 5 inferred relationships involving `ModelManager` (e.g. with `PoseBin` and `FacePose`) actually correct?**
-  _`ModelManager` has 5 INFERRED edges - model-reasoned connections that need verification._
-- **What connects `Test camera indices 0 to max_index-1`, `Alembic environment configuration for async migrations.`, `Run migrations in 'offline' mode.` to the rest of the system?**
-  _276 weakly-connected nodes found - possible documentation gaps or missing edges._
-- **Should `Community 0` be split into smaller, more focused modules?**
-  _Cohesion score 0.05 - nodes in this community are weakly interconnected._
+- **What is the exact relationship between `Face crop 041bcb21-e582-4e7a-83c7-0f95723480c0` and `Face crop d61672e0-f72d-49da-9d97-0a21c018fc67`?**
+  _Edge tagged AMBIGUOUS (relation: semantically_similar_to) - confidence is low._
+- **What is the exact relationship between `Visitor 93ddc0e9-45ab-4d95-94f2-4f60b94dff34` and `Visitor 9ebf00c2-24eb-469d-870c-058d9a2d3454`?**
+  _Edge tagged AMBIGUOUS (relation: conceptually_related_to) - confidence is low._
+- **What is the exact relationship between `Visitor 9ebf00c2-24eb-469d-870c-058d9a2d3454` and `Thumbnail a0b171a0`?**
+  _Edge tagged AMBIGUOUS (relation: conceptually_related_to) - confidence is low._
+- **Why does `Visitor 7eca5017-112f-45c7-a132-1acf7c7ddaff` connect `Community 10` to `Community 2`?**
+  _High betweenness centrality (0.013) - this node is a cross-community bridge._
+- **Why does `VisitTracker` connect `Community 4` to `Community 0`?**
+  _High betweenness centrality (0.011) - this node is a cross-community bridge._
+- **Are the 2 inferred relationships involving `Visitor 2585fb35-2d25-4933-a49b-411a5763a9dc` (e.g. with `Visitor 23d9b77b-5a28-4107-9214-f1d216b9df45` and `Visitor 28956e92-aaab-48fe-9552-f086fffe6b28`) actually correct?**
+  _`Visitor 2585fb35-2d25-4933-a49b-411a5763a9dc` has 2 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 2 inferred relationships involving `Visitor (ORM Model)` (e.g. with `Adaptive Centroid Learning` and `HNSW Vector Indexes`) actually correct?**
+  _`Visitor (ORM Model)` has 2 INFERRED edges - model-reasoned connections that need verification._

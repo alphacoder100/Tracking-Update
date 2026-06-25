@@ -1,322 +1,612 @@
 {
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\init-db.sql": {
-    "mtime": 1781697819.3142319,
-    "hash": "245ea903d3f097290adab3cf39c62056"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\test_camera.py": {
-    "mtime": 1781697819.3142319,
-    "hash": "58c066b361b942575d1a99da1c75f920"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\alembic\\env.py": {
-    "mtime": 1781697818.7001555,
-    "hash": "5aba9cad96bb3c645fa1e3692a0227a5"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\alembic\\versions\\001_restaurant_schema.py": {
-    "mtime": 1781697818.707154,
-    "hash": "0c241b6174e125b2005229f722a5a150"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\alembic\\versions\\002_pose_bin_consent.py": {
-    "mtime": 1781697818.7111564,
-    "hash": "a507371f6518ea30ecd7798ede35601f"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\alembic\\versions\\003_consent_system.py": {
-    "mtime": 1781697818.7151554,
-    "hash": "c46a5118b6241284af86028e5dfeefc7"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\alembic\\versions\\004_partition_detection_events.py": {
-    "mtime": 1781697818.718156,
-    "hash": "bd04be4b32a20fcafa7d1db1e60956ca"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\alembic\\versions\\005_runtime_settings.py": {
-    "mtime": 1781697818.7211497,
-    "hash": "9101295dbae59c80d0a7949dcb529c3d"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\alembic\\versions\\006_review_queue.py": {
-    "mtime": 1781697818.72516,
-    "hash": "8d05da97446572e64c736a8dcb56561e"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\alembic\\versions\\007_auto_tuning_log.py": {
-    "mtime": 1781697818.7281585,
-    "hash": "8b50cd798194ce1cf5446c409ac27715"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\alembic\\versions\\008_review_queue_match.py": {
-    "mtime": 1781697818.7311518,
-    "hash": "0475f29d941e193b4571af122798b605"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\alembic\\versions\\009_face_crop_clarity.py": {
-    "mtime": 1781697818.7351525,
-    "hash": "fd0abb332c223671619566af2173a928"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\app\\config.py": {
-    "mtime": 1781699001.2084002,
-    "hash": "d6bb27f2fde66bfac29b2fb359091c04"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\app\\cv_pipeline.py": {
-    "mtime": 1781697818.7836936,
-    "hash": "1d33fb92d39e9ff2748d6537d032c3e4"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\app\\database.py": {
-    "mtime": 1781697818.7876873,
-    "hash": "6ebabb618f37a3fd6e43eae1d101cc4b"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\app\\main.py": {
-    "mtime": 1781697818.7916915,
-    "hash": "b5b46995ba97c0e082a489a6679acd95"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\app\\ml_models.py": {
-    "mtime": 1781697818.7946918,
-    "hash": "bc793ec5e8b17055bf903fab571265cf"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\app\\models.py": {
-    "mtime": 1781697818.798697,
-    "hash": "8bc4ec294291eb112a4fc55672db8ec5"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\app\\monitoring.py": {
-    "mtime": 1781697818.8026898,
-    "hash": "d603ccc5e54012ea8e6a8218622f4a11"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\app\\osnet.py": {
-    "mtime": 1781697818.8056903,
-    "hash": "ac9b762c55531a66d01cc7ec281a9f75"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\app\\schemas.py": {
-    "mtime": 1781697818.8096943,
-    "hash": "cdfb3c2a7b05daedc18d43ede8b72695"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\app\\utils.py": {
-    "mtime": 1781697818.877784,
-    "hash": "341e967b58b59429c569de251ceb035f"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\app\\__init__.py": {
-    "mtime": 1781697818.7401533,
-    "hash": "5a7d95df0412ca36f401980bdeb88ac9"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\app\\api\\activity.py": {
-    "mtime": 1781697818.7481706,
-    "hash": "eea3643b7b0011b21259b22c0316e5f0"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\app\\api\\admin.py": {
-    "mtime": 1781697818.7511656,
-    "hash": "f3f720a6aca6d837fed9d1dd5b35a97c"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\app\\api\\admin_config.py": {
-    "mtime": 1781699001.2034156,
-    "hash": "2835a0c5aa0418816778aa90e9f93cfc"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\app\\api\\analytics.py": {
-    "mtime": 1781697818.7581677,
-    "hash": "16414ab50d7ba8c9aecf47922f9c85e5"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\app\\api\\camera.py": {
-    "mtime": 1781697818.7616873,
-    "hash": "2133a2989842a1c79de464097d924375"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\app\\api\\detect.py": {
-    "mtime": 1781697818.7656915,
-    "hash": "9dc4beefa313f8063a09dea353cd98ad"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\app\\api\\settings.py": {
-    "mtime": 1781697818.768695,
-    "hash": "5fae7845cc35d7d9766bfd3945fed02a"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\app\\api\\visitors.py": {
-    "mtime": 1781697818.7726905,
-    "hash": "9cd1da3d4ce6d3d4d82ebc02a3ecf7ac"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\app\\api\\websocket.py": {
-    "mtime": 1781697818.775694,
-    "hash": "356cfe71c6440b00744c14d0cd8af2a0"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\app\\api\\__init__.py": {
-    "mtime": 1781697818.745165,
-    "hash": "bc9d23879d94c389c1cfb2be6369a3ce"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\app\\services\\analytics_service.py": {
-    "mtime": 1781697818.8166945,
-    "hash": "8a3bf55eaae0b2d64a67f4501598ae5d"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\app\\services\\auto_enroller.py": {
-    "mtime": 1781699001.2133968,
-    "hash": "a2d1545d02fac0084ec78806e3b027de"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\app\\services\\auto_tuning.py": {
-    "mtime": 1781697818.8246891,
-    "hash": "c1920180fec4ba90644923e5e03b6b67"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\app\\services\\camera_service.py": {
-    "mtime": 1781697818.829686,
-    "hash": "d269ff810211965e2e02724448602787"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\app\\services\\cascade_pipeline.py": {
-    "mtime": 1781697818.8346877,
-    "hash": "4d8ecab32371b8d15756029ed009cf68"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\app\\services\\detection_pipeline.py": {
-    "mtime": 1781697818.8406887,
-    "hash": "4835812a6b7ff48122fba0a9e36b038e"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\app\\services\\face_quality.py": {
-    "mtime": 1781697818.845707,
-    "hash": "27c169c168384fedbadf52d7bec40bed"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\app\\services\\identity_resolver.py": {
-    "mtime": 1781697818.8497024,
-    "hash": "fb877cfa2cd312e4d3f67b8c75ee46e2"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\app\\services\\mask_detector.py": {
-    "mtime": 1781697818.8537014,
-    "hash": "5eb2fb70a1c2b95271b4043be9469ee6"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\app\\services\\redis_visit_tracker.py": {
-    "mtime": 1781697818.857707,
-    "hash": "095fc32db20763530a6f1eb0679eaee0"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\app\\services\\review_queue.py": {
-    "mtime": 1781699001.2173986,
-    "hash": "f61dd9b962ec78f24b880549a5a85fde"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\app\\services\\temporal_consistency.py": {
-    "mtime": 1781697818.8657813,
-    "hash": "cc09dcd47ab247fd759f4fa40beac63d"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\app\\services\\visitor_merge.py": {
-    "mtime": 1781699001.2223997,
-    "hash": "e06faeb7f2c874c80d0cb300dd516a0f"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\app\\services\\visit_tracker.py": {
-    "mtime": 1781697818.8687859,
-    "hash": "5dec8c14bdac05516687f182bd9aa78c"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\app\\services\\__init__.py": {
-    "mtime": 1781697818.812693,
-    "hash": "d41d8cd98f00b204e9800998ecf8427e"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\scripts\\pre_register_staff.py": {
-    "mtime": 1781697818.8848002,
-    "hash": "3358e0f5410b30f812ce38e70b6c7dc9"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\dashboard\\next.config.js": {
-    "mtime": 1781697818.9919803,
-    "hash": "d5ec4d32947b85f4ab0e0446643c49ca"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\dashboard\\postcss.config.js": {
-    "mtime": 1781697819.0039847,
-    "hash": "9a248c780e4c76f85b0f492f63a3d417"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\dashboard\\tailwind.config.ts": {
-    "mtime": 1781697819.0069792,
-    "hash": "2934e4967bbcd9391839e1846a750c4e"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\dashboard\\app\\layout.tsx": {
-    "mtime": 1781697818.920785,
-    "hash": "bc649d55ee72877655b71ff80ee00cab"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\dashboard\\app\\page.tsx": {
-    "mtime": 1781697818.9227872,
-    "hash": "8f1267910f3b9d1f6e628c3305b8d682"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\dashboard\\app\\activity\\page.tsx": {
-    "mtime": 1781697818.9017906,
-    "hash": "1dc0edfe7e7b018f4c4b9a9af79b10e0"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\dashboard\\app\\analytics\\page.tsx": {
-    "mtime": 1781697818.9057777,
-    "hash": "d0ba171b4ac448cc7d81497698892724"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\dashboard\\app\\api\\backend\\[...path]\\route.ts": {
-    "mtime": 1781697818.910783,
-    "hash": "40749841eba1dd6e552ac178c8f6e55b"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\dashboard\\app\\camera\\page.tsx": {
-    "mtime": 1781697818.9137862,
-    "hash": "5a1ce08a42e9844981d1ebe394a19542"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\dashboard\\app\\review\\page.tsx": {
-    "mtime": 1781699001.226398,
-    "hash": "1ced94669e0b3f464e2f2849f13a7a31"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\dashboard\\app\\settings\\page.tsx": {
-    "mtime": 1781697818.930784,
-    "hash": "4c689aaebb2dc74459c45654ea8e37f4"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\dashboard\\app\\studio\\page.tsx": {
-    "mtime": 1781697818.9347794,
-    "hash": "aad81538cf0abe355cc09b941c684621"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\dashboard\\app\\visitors\\page.tsx": {
-    "mtime": 1781697818.9437842,
-    "hash": "dcd0e1ac4cc7d7458351519f0de1301a"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\dashboard\\app\\visitors\\[id]\\page.tsx": {
-    "mtime": 1781697818.9397838,
-    "hash": "63ec650d1a2c319630b7e973ca4b84f7"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\dashboard\\components\\activity-feed.tsx": {
-    "mtime": 1781697818.9477968,
-    "hash": "4be9c97e60d69666dc0a3e0b751d310b"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\dashboard\\components\\charts.tsx": {
-    "mtime": 1781697818.9507937,
-    "hash": "71b945be624b4131407382c5eade146b"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\dashboard\\components\\detection-feed.tsx": {
-    "mtime": 1781697818.9537954,
-    "hash": "0f9a51d53d13bf83c336c7d8769a05a2"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\dashboard\\components\\sidebar.tsx": {
-    "mtime": 1781697818.956798,
-    "hash": "40cd8eec7331cae81edad139910c2857"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\dashboard\\components\\stat-card.tsx": {
-    "mtime": 1781697818.9597926,
-    "hash": "5ba81eb0bab88454b6c09744724d546d"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\dashboard\\components\\ui.tsx": {
-    "mtime": 1781697818.9619753,
-    "hash": "26214af3a99988b2002495829b807646"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\dashboard\\components\\visitor-table.tsx": {
-    "mtime": 1781697818.9649806,
-    "hash": "4e37172c11ad03a1b709979465e1b034"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\dashboard\\lib\\api.ts": {
-    "mtime": 1781697818.9729762,
-    "hash": "98735cc91036e6dc15805cd61f7181c8"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\dashboard\\lib\\format.ts": {
-    "mtime": 1781697818.978974,
-    "hash": "70fa8bad23ec3d0e56ddea7b4416d02b"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\dashboard\\lib\\types.ts": {
-    "mtime": 1781697818.9829786,
-    "hash": "798e1f43d1e8b13a3dff20552919e492"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\docker-compose.yml": {
-    "mtime": 1781697819.013974,
-    "hash": "91a5b23ffaaa34ed4ef1a7188d4a1126"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\README.md": {
-    "mtime": 1781697818.6711586,
-    "hash": "6a1e0c035ca171f56d06bbce4d3fa6d5"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\RESTAURANT_TRACKER_FAILURE_ANALYSIS.md": {
-    "mtime": 1781697818.675154,
-    "hash": "2fff7f12206176595a4dde2b37ba2a9f"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\RESTAURANT_TRACKER_PRODUCTION_DEPLOYMENT_PLAN.md": {
-    "mtime": 1781697818.682155,
-    "hash": "4c4340cb8dd85a61a1bf0ac299279448"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\ULTIMATE_RESTAURANT_TRACKER_PLAN.md": {
-    "mtime": 1781697818.6881542,
-    "hash": "0a501bb1c2c4d140ee3d2f12c934bd33"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\backend\\requirements.txt": {
-    "mtime": 1781697818.8807857,
-    "hash": "3c11f9facd25251840f9751b23463599"
-  },
-  "C:\\Users\\jana.bishwanath\\Desktop\\Person Tracking\\Tracking-Update\\dashboard\\README.md": {
-    "mtime": 1781697818.8967845,
-    "hash": "c2c074d6a6a44e84240146ac06c5e860"
+  ".graphify_analysis.json": {
+    "mtime": 1782403936.8167682,
+    "ast_hash": "92d123b4c20cd1a08c70a670d6ba3661",
+    "semantic_hash": "92d123b4c20cd1a08c70a670d6ba3661"
+  },
+  ".graphify_ast.json": {
+    "mtime": 1782403936.819255,
+    "ast_hash": "e3441df2e27fd373470d01b9fa237eaf",
+    "semantic_hash": "e3441df2e27fd373470d01b9fa237eaf"
+  },
+  ".graphify_detect.json": {
+    "mtime": 1782403936.8280318,
+    "ast_hash": "5d5aa997c184425df02e242d5547f3c1",
+    "semantic_hash": "5d5aa997c184425df02e242d5547f3c1"
+  },
+  ".graphify_extract.json": {
+    "mtime": 1782403936.8309772,
+    "ast_hash": "fd5608c69ffe526bdac71f1104decf1a",
+    "semantic_hash": "fd5608c69ffe526bdac71f1104decf1a"
+  },
+  ".graphify_incremental.json": {
+    "mtime": 1782403936.832338,
+    "ast_hash": "4e1c37f61b64aa26b10e83dce11db9d8",
+    "semantic_hash": "4e1c37f61b64aa26b10e83dce11db9d8"
+  },
+  ".graphify_old.json": {
+    "mtime": 1782403936.8358617,
+    "ast_hash": "ffa0c64d5a05c4bf1671ac4736f9c42e",
+    "semantic_hash": "ffa0c64d5a05c4bf1671ac4736f9c42e"
+  },
+  "backend/alembic/env.py": {
+    "mtime": 1782403936.8419495,
+    "ast_hash": "5aba9cad96bb3c645fa1e3692a0227a5",
+    "semantic_hash": "5aba9cad96bb3c645fa1e3692a0227a5"
+  },
+  "backend/alembic/versions/001_restaurant_schema.py": {
+    "mtime": 1782403936.8424523,
+    "ast_hash": "0c241b6174e125b2005229f722a5a150",
+    "semantic_hash": "0c241b6174e125b2005229f722a5a150"
+  },
+  "backend/alembic/versions/002_pose_bin_consent.py": {
+    "mtime": 1782403936.8424523,
+    "ast_hash": "a507371f6518ea30ecd7798ede35601f",
+    "semantic_hash": "a507371f6518ea30ecd7798ede35601f"
+  },
+  "backend/alembic/versions/003_consent_system.py": {
+    "mtime": 1782403936.8424523,
+    "ast_hash": "c46a5118b6241284af86028e5dfeefc7",
+    "semantic_hash": "c46a5118b6241284af86028e5dfeefc7"
+  },
+  "backend/alembic/versions/004_partition_detection_events.py": {
+    "mtime": 1782403936.8424523,
+    "ast_hash": "bd04be4b32a20fcafa7d1db1e60956ca",
+    "semantic_hash": "bd04be4b32a20fcafa7d1db1e60956ca"
+  },
+  "backend/alembic/versions/005_runtime_settings.py": {
+    "mtime": 1782403936.8458972,
+    "ast_hash": "9101295dbae59c80d0a7949dcb529c3d",
+    "semantic_hash": "9101295dbae59c80d0a7949dcb529c3d"
+  },
+  "backend/alembic/versions/006_review_queue.py": {
+    "mtime": 1782403936.8458972,
+    "ast_hash": "8d05da97446572e64c736a8dcb56561e",
+    "semantic_hash": "8d05da97446572e64c736a8dcb56561e"
+  },
+  "backend/alembic/versions/007_auto_tuning_log.py": {
+    "mtime": 1782403936.8470252,
+    "ast_hash": "8b50cd798194ce1cf5446c409ac27715",
+    "semantic_hash": "8b50cd798194ce1cf5446c409ac27715"
+  },
+  "backend/alembic/versions/008_review_queue_match.py": {
+    "mtime": 1782403936.8470252,
+    "ast_hash": "0475f29d941e193b4571af122798b605",
+    "semantic_hash": "0475f29d941e193b4571af122798b605"
+  },
+  "backend/alembic/versions/009_face_crop_clarity.py": {
+    "mtime": 1782403936.8470252,
+    "ast_hash": "fd0abb332c223671619566af2173a928",
+    "semantic_hash": "fd0abb332c223671619566af2173a928"
+  },
+  "backend/alembic/versions/010_pose_and_adaptive_thresholds.py": {
+    "mtime": 1782403936.8470252,
+    "ast_hash": "fe61c4a7c97d7ae3a968d8ecc9787466",
+    "semantic_hash": "fe61c4a7c97d7ae3a968d8ecc9787466"
+  },
+  "backend/alembic/versions/011_cross_camera.py": {
+    "mtime": 1782403936.8470252,
+    "ast_hash": "11c182ef2a10c12a9e606493da69b87d",
+    "semantic_hash": "11c182ef2a10c12a9e606493da69b87d"
+  },
+  "backend/alembic/versions/012_gate_visits.py": {
+    "mtime": 1782403936.8470252,
+    "ast_hash": "b21659aac8e7d83637d97887b650f6a4",
+    "semantic_hash": "b21659aac8e7d83637d97887b650f6a4"
+  },
+  "backend/app/__init__.py": {
+    "mtime": 1782403936.8470252,
+    "ast_hash": "5a7d95df0412ca36f401980bdeb88ac9",
+    "semantic_hash": "5a7d95df0412ca36f401980bdeb88ac9"
+  },
+  "backend/app/api/__init__.py": {
+    "mtime": 1782403936.8470252,
+    "ast_hash": "bc9d23879d94c389c1cfb2be6369a3ce",
+    "semantic_hash": "bc9d23879d94c389c1cfb2be6369a3ce"
+  },
+  "backend/app/api/activity.py": {
+    "mtime": 1782403936.8470252,
+    "ast_hash": "eea3643b7b0011b21259b22c0316e5f0",
+    "semantic_hash": "eea3643b7b0011b21259b22c0316e5f0"
+  },
+  "backend/app/api/admin.py": {
+    "mtime": 1782403936.8470252,
+    "ast_hash": "f3f720a6aca6d837fed9d1dd5b35a97c",
+    "semantic_hash": "f3f720a6aca6d837fed9d1dd5b35a97c"
+  },
+  "backend/app/api/admin_config.py": {
+    "mtime": 1782403936.8470252,
+    "ast_hash": "0604304e0ef5a56009d25530da29903a",
+    "semantic_hash": "0604304e0ef5a56009d25530da29903a"
+  },
+  "backend/app/api/analytics.py": {
+    "mtime": 1782403936.853375,
+    "ast_hash": "f56172f1cd00faf54093c1f5b5953d8e",
+    "semantic_hash": "f56172f1cd00faf54093c1f5b5953d8e"
+  },
+  "backend/app/api/camera.py": {
+    "mtime": 1782403936.853375,
+    "ast_hash": "22267dc5f68c026b06f75e26d1fa8380",
+    "semantic_hash": "22267dc5f68c026b06f75e26d1fa8380"
+  },
+  "backend/app/api/detect.py": {
+    "mtime": 1782403936.8550727,
+    "ast_hash": "5562ed1395ce621129791bc76a28daa3",
+    "semantic_hash": "5562ed1395ce621129791bc76a28daa3"
+  },
+  "backend/app/api/settings.py": {
+    "mtime": 1782403936.8550727,
+    "ast_hash": "5fae7845cc35d7d9766bfd3945fed02a",
+    "semantic_hash": "5fae7845cc35d7d9766bfd3945fed02a"
+  },
+  "backend/app/api/visitors.py": {
+    "mtime": 1782403936.8557484,
+    "ast_hash": "6e80ff55b999964a58c38dc6ec0b02ba",
+    "semantic_hash": "6e80ff55b999964a58c38dc6ec0b02ba"
+  },
+  "backend/app/api/websocket.py": {
+    "mtime": 1782403936.8557484,
+    "ast_hash": "dbce647c6c8b46814d19d054d5eb86dd",
+    "semantic_hash": "dbce647c6c8b46814d19d054d5eb86dd"
+  },
+  "backend/app/config.py": {
+    "mtime": 1782403936.8557484,
+    "ast_hash": "989b4a29014528286c1f9198fbe1023a",
+    "semantic_hash": "989b4a29014528286c1f9198fbe1023a"
+  },
+  "backend/app/cv_pipeline.py": {
+    "mtime": 1782403936.8579776,
+    "ast_hash": "442b2413841e05964bdf05f920ed14b3",
+    "semantic_hash": "442b2413841e05964bdf05f920ed14b3"
+  },
+  "backend/app/database.py": {
+    "mtime": 1782403936.8579776,
+    "ast_hash": "6ebabb618f37a3fd6e43eae1d101cc4b",
+    "semantic_hash": "6ebabb618f37a3fd6e43eae1d101cc4b"
+  },
+  "backend/app/geometry.py": {
+    "mtime": 1782403936.859987,
+    "ast_hash": "d9af8788336470ce530d546e897f8385",
+    "semantic_hash": "d9af8788336470ce530d546e897f8385"
+  },
+  "backend/app/main.py": {
+    "mtime": 1782403936.859987,
+    "ast_hash": "1341cee62e319b74652b38ffc386b41e",
+    "semantic_hash": "1341cee62e319b74652b38ffc386b41e"
+  },
+  "backend/app/ml_models.py": {
+    "mtime": 1782403936.861136,
+    "ast_hash": "4feeb12c253881befe8f5a8a3816a6a0",
+    "semantic_hash": "4feeb12c253881befe8f5a8a3816a6a0"
+  },
+  "backend/app/models.py": {
+    "mtime": 1782403936.861136,
+    "ast_hash": "1ef20efda444a1c4b40d3902d09e703d",
+    "semantic_hash": "1ef20efda444a1c4b40d3902d09e703d"
+  },
+  "backend/app/monitoring.py": {
+    "mtime": 1782403936.861136,
+    "ast_hash": "d603ccc5e54012ea8e6a8218622f4a11",
+    "semantic_hash": "d603ccc5e54012ea8e6a8218622f4a11"
+  },
+  "backend/app/osnet.py": {
+    "mtime": 1782403936.863939,
+    "ast_hash": "ac9b762c55531a66d01cc7ec281a9f75",
+    "semantic_hash": "ac9b762c55531a66d01cc7ec281a9f75"
+  },
+  "backend/app/schemas.py": {
+    "mtime": 1782403936.863939,
+    "ast_hash": "cdfb3c2a7b05daedc18d43ede8b72695",
+    "semantic_hash": "cdfb3c2a7b05daedc18d43ede8b72695"
+  },
+  "backend/app/services/__init__.py": {
+    "mtime": 1782403936.8652275,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "backend/app/services/analytics_service.py": {
+    "mtime": 1782403936.8652275,
+    "ast_hash": "0ada014e9b9a9b978cfba16d2cb61bd6",
+    "semantic_hash": "0ada014e9b9a9b978cfba16d2cb61bd6"
+  },
+  "backend/app/services/auto_enroller.py": {
+    "mtime": 1782403936.8652275,
+    "ast_hash": "a5c540a50e54bc8ea818beb5974de80d",
+    "semantic_hash": "a5c540a50e54bc8ea818beb5974de80d"
+  },
+  "backend/app/services/auto_tuning.py": {
+    "mtime": 1782403936.8669333,
+    "ast_hash": "c1920180fec4ba90644923e5e03b6b67",
+    "semantic_hash": "c1920180fec4ba90644923e5e03b6b67"
+  },
+  "backend/app/services/camera_manager.py": {
+    "mtime": 1782403936.8669333,
+    "ast_hash": "e2e278133f8eb5436e77ba994904240e",
+    "semantic_hash": "e2e278133f8eb5436e77ba994904240e"
+  },
+  "backend/app/services/camera_service.py": {
+    "mtime": 1782403936.8669333,
+    "ast_hash": "a716d055656476dbacb1a7feac34605a",
+    "semantic_hash": "a716d055656476dbacb1a7feac34605a"
+  },
+  "backend/app/services/cascade_pipeline.py": {
+    "mtime": 1782403936.8669333,
+    "ast_hash": "4d8ecab32371b8d15756029ed009cf68",
+    "semantic_hash": "4d8ecab32371b8d15756029ed009cf68"
+  },
+  "backend/app/services/cross_camera.py": {
+    "mtime": 1782403936.8669333,
+    "ast_hash": "a692cdad0f9ed516dc2d25cb852de844",
+    "semantic_hash": "a692cdad0f9ed516dc2d25cb852de844"
+  },
+  "backend/app/services/detection_pipeline.py": {
+    "mtime": 1782403936.8669333,
+    "ast_hash": "3bdaa911f102ae168f36ecdad48ea246",
+    "semantic_hash": "3bdaa911f102ae168f36ecdad48ea246"
+  },
+  "backend/app/services/face_quality.py": {
+    "mtime": 1782403936.8669333,
+    "ast_hash": "27c169c168384fedbadf52d7bec40bed",
+    "semantic_hash": "27c169c168384fedbadf52d7bec40bed"
+  },
+  "backend/app/services/gate_tracker.py": {
+    "mtime": 1782403936.8669333,
+    "ast_hash": "31c1ae80b6e92c3eb960076847eddc96",
+    "semantic_hash": "31c1ae80b6e92c3eb960076847eddc96"
+  },
+  "backend/app/services/identity_resolver.py": {
+    "mtime": 1782403936.8669333,
+    "ast_hash": "7e67813f0a922ce7207c1907b6435f52",
+    "semantic_hash": "7e67813f0a922ce7207c1907b6435f52"
+  },
+  "backend/app/services/mask_detector.py": {
+    "mtime": 1782403936.8669333,
+    "ast_hash": "5eb2fb70a1c2b95271b4043be9469ee6",
+    "semantic_hash": "5eb2fb70a1c2b95271b4043be9469ee6"
+  },
+  "backend/app/services/redis_visit_tracker.py": {
+    "mtime": 1782403936.8739083,
+    "ast_hash": "095fc32db20763530a6f1eb0679eaee0",
+    "semantic_hash": "095fc32db20763530a6f1eb0679eaee0"
+  },
+  "backend/app/services/review_queue.py": {
+    "mtime": 1782403936.8739083,
+    "ast_hash": "f61dd9b962ec78f24b880549a5a85fde",
+    "semantic_hash": "f61dd9b962ec78f24b880549a5a85fde"
+  },
+  "backend/app/services/rtsp_native.py": {
+    "mtime": 1782403936.875172,
+    "ast_hash": "1396ce16ef6c80f1af06ce754fd266a8",
+    "semantic_hash": "1396ce16ef6c80f1af06ce754fd266a8"
+  },
+  "backend/app/services/temporal_consistency.py": {
+    "mtime": 1782403936.875172,
+    "ast_hash": "74f6d69d03869bf8577ee292dd40dd93",
+    "semantic_hash": "74f6d69d03869bf8577ee292dd40dd93"
+  },
+  "backend/app/services/tracklet.py": {
+    "mtime": 1782403936.8764708,
+    "ast_hash": "2d8176d6616fb2a1da4b82a1a1d8ecca",
+    "semantic_hash": "2d8176d6616fb2a1da4b82a1a1d8ecca"
+  },
+  "backend/app/services/visit_tracker.py": {
+    "mtime": 1782403936.8772109,
+    "ast_hash": "5dec8c14bdac05516687f182bd9aa78c",
+    "semantic_hash": "5dec8c14bdac05516687f182bd9aa78c"
+  },
+  "backend/app/services/visitor_merge.py": {
+    "mtime": 1782403936.8772109,
+    "ast_hash": "f636f8c24b202b01fb0d6368ed964dfd",
+    "semantic_hash": "f636f8c24b202b01fb0d6368ed964dfd"
+  },
+  "backend/app/similarity.py": {
+    "mtime": 1782403936.8784614,
+    "ast_hash": "b9d233cd799e7d2e50cce6ee7e21659e",
+    "semantic_hash": "b9d233cd799e7d2e50cce6ee7e21659e"
+  },
+  "backend/app/utils.py": {
+    "mtime": 1782403936.8784614,
+    "ast_hash": "3d1789f3c31db30b76dd3d5a4f3b522e",
+    "semantic_hash": "3d1789f3c31db30b76dd3d5a4f3b522e"
+  },
+  "backend/scripts/pre_register_staff.py": {
+    "mtime": 1782403936.8804605,
+    "ast_hash": "3358e0f5410b30f812ce38e70b6c7dc9",
+    "semantic_hash": "3358e0f5410b30f812ce38e70b6c7dc9"
+  },
+  "backend/tests/conftest.py": {
+    "mtime": 1782403936.8814619,
+    "ast_hash": "cbfd8f936f5262f411728bcbc9f6b0cf",
+    "semantic_hash": "cbfd8f936f5262f411728bcbc9f6b0cf"
+  },
+  "backend/tests/test_phase1_resolver.py": {
+    "mtime": 1782403936.8814619,
+    "ast_hash": "6201363e4e13deae38402a74c795e3b6",
+    "semantic_hash": "6201363e4e13deae38402a74c795e3b6"
+  },
+  "dashboard/app/activity/page.tsx": {
+    "mtime": 1782403936.8855288,
+    "ast_hash": "1dc0edfe7e7b018f4c4b9a9af79b10e0",
+    "semantic_hash": "1dc0edfe7e7b018f4c4b9a9af79b10e0"
+  },
+  "dashboard/app/analytics/page.tsx": {
+    "mtime": 1782403936.8865817,
+    "ast_hash": "2c5517ba7ef093e4d5c1a24dbb5fc198",
+    "semantic_hash": "2c5517ba7ef093e4d5c1a24dbb5fc198"
+  },
+  "dashboard/app/api/backend/[...path]/route.ts": {
+    "mtime": 1782403936.8880713,
+    "ast_hash": "40749841eba1dd6e552ac178c8f6e55b",
+    "semantic_hash": "40749841eba1dd6e552ac178c8f6e55b"
+  },
+  "dashboard/app/camera/page.tsx": {
+    "mtime": 1782403936.889083,
+    "ast_hash": "8f055d3205744e74fbb7606101612238",
+    "semantic_hash": "8f055d3205744e74fbb7606101612238"
+  },
+  "dashboard/app/layout.tsx": {
+    "mtime": 1782403936.890337,
+    "ast_hash": "077ee6dcac80f3619e4374c79fad49bd",
+    "semantic_hash": "077ee6dcac80f3619e4374c79fad49bd"
+  },
+  "dashboard/app/multicam/page.tsx": {
+    "mtime": 1782403936.891053,
+    "ast_hash": "3d141345d6ec81ae5b7bbda4fbf43d2c",
+    "semantic_hash": "3d141345d6ec81ae5b7bbda4fbf43d2c"
+  },
+  "dashboard/app/page.tsx": {
+    "mtime": 1782403936.891053,
+    "ast_hash": "2a6c055a94ad15984dd4a6d4d40475cb",
+    "semantic_hash": "2a6c055a94ad15984dd4a6d4d40475cb"
+  },
+  "dashboard/app/review/page.tsx": {
+    "mtime": 1782403936.891053,
+    "ast_hash": "1ced94669e0b3f464e2f2849f13a7a31",
+    "semantic_hash": "1ced94669e0b3f464e2f2849f13a7a31"
+  },
+  "dashboard/app/settings/page.tsx": {
+    "mtime": 1782403936.8943202,
+    "ast_hash": "972a175fa4f02cd59f5f07b24a8ef89f",
+    "semantic_hash": "972a175fa4f02cd59f5f07b24a8ef89f"
+  },
+  "dashboard/app/studio/page.tsx": {
+    "mtime": 1782403936.8964834,
+    "ast_hash": "89c3242bfa3f543718b599b8848300fe",
+    "semantic_hash": "89c3242bfa3f543718b599b8848300fe"
+  },
+  "dashboard/app/visitors/[id]/page.tsx": {
+    "mtime": 1782403936.8982587,
+    "ast_hash": "29b424b4ccea2e2af140ac577476db63",
+    "semantic_hash": "29b424b4ccea2e2af140ac577476db63"
+  },
+  "dashboard/app/visitors/page.tsx": {
+    "mtime": 1782403936.8982587,
+    "ast_hash": "dcd0e1ac4cc7d7458351519f0de1301a",
+    "semantic_hash": "dcd0e1ac4cc7d7458351519f0de1301a"
+  },
+  "dashboard/components/activity-feed.tsx": {
+    "mtime": 1782403936.9002655,
+    "ast_hash": "d3d1ccb15fec7fb83d797c6ff9c21dc3",
+    "semantic_hash": "d3d1ccb15fec7fb83d797c6ff9c21dc3"
+  },
+  "dashboard/components/camera-topology.tsx": {
+    "mtime": 1782403936.9002655,
+    "ast_hash": "7e4878bec13e6e054f05e586f9620be3",
+    "semantic_hash": "7e4878bec13e6e054f05e586f9620be3"
+  },
+  "dashboard/components/charts.tsx": {
+    "mtime": 1782403936.9002655,
+    "ast_hash": "71b945be624b4131407382c5eade146b",
+    "semantic_hash": "71b945be624b4131407382c5eade146b"
+  },
+  "dashboard/components/detection-feed.tsx": {
+    "mtime": 1782403936.9022763,
+    "ast_hash": "0a8a98213fe331e2684b3618c9c21dd1",
+    "semantic_hash": "0a8a98213fe331e2684b3618c9c21dd1"
+  },
+  "dashboard/components/gate-activity.tsx": {
+    "mtime": 1782403936.9022763,
+    "ast_hash": "dccc5a92a25814b3936419e36094096d",
+    "semantic_hash": "dccc5a92a25814b3936419e36094096d"
+  },
+  "dashboard/components/gate-config.tsx": {
+    "mtime": 1782403936.9022763,
+    "ast_hash": "240de369379f0aad33e66af08bdda62a",
+    "semantic_hash": "240de369379f0aad33e66af08bdda62a"
+  },
+  "dashboard/components/main-content.tsx": {
+    "mtime": 1782403936.9022763,
+    "ast_hash": "dacabe28882bfa125ec9cf175d0c4a7a",
+    "semantic_hash": "dacabe28882bfa125ec9cf175d0c4a7a"
+  },
+  "dashboard/components/mobile-header.tsx": {
+    "mtime": 1782403936.9055843,
+    "ast_hash": "11cac1447eaff540a9f9a1158c4d645b",
+    "semantic_hash": "11cac1447eaff540a9f9a1158c4d645b"
+  },
+  "dashboard/components/page-transition.tsx": {
+    "mtime": 1782403936.9055843,
+    "ast_hash": "e66c1ae960228abb8721ca4ee01ac568",
+    "semantic_hash": "e66c1ae960228abb8721ca4ee01ac568"
+  },
+  "dashboard/components/sidebar-context.tsx": {
+    "mtime": 1782403936.9055843,
+    "ast_hash": "9f1f8a828ca34dc5d069a40938a59975",
+    "semantic_hash": "9f1f8a828ca34dc5d069a40938a59975"
+  },
+  "dashboard/components/sidebar.tsx": {
+    "mtime": 1782403936.9055843,
+    "ast_hash": "f9d26d6e8c8ba63ce2c9bf17c4910948",
+    "semantic_hash": "f9d26d6e8c8ba63ce2c9bf17c4910948"
+  },
+  "dashboard/components/skeletons.tsx": {
+    "mtime": 1782403936.9055843,
+    "ast_hash": "6996c8632e7ba435c1df6cd2538fd6b8",
+    "semantic_hash": "6996c8632e7ba435c1df6cd2538fd6b8"
+  },
+  "dashboard/components/stat-card.tsx": {
+    "mtime": 1782403936.9055843,
+    "ast_hash": "5ba81eb0bab88454b6c09744724d546d",
+    "semantic_hash": "5ba81eb0bab88454b6c09744724d546d"
+  },
+  "dashboard/components/toast.tsx": {
+    "mtime": 1782403936.9096978,
+    "ast_hash": "264e0b2aa16693c767f56de76b63cb69",
+    "semantic_hash": "264e0b2aa16693c767f56de76b63cb69"
+  },
+  "dashboard/components/ui.tsx": {
+    "mtime": 1782403936.9096978,
+    "ast_hash": "845d49ff27a1bf1ae4760c885b88b576",
+    "semantic_hash": "845d49ff27a1bf1ae4760c885b88b576"
+  },
+  "dashboard/components/visitor-table.tsx": {
+    "mtime": 1782403936.9111586,
+    "ast_hash": "4e37172c11ad03a1b709979465e1b034",
+    "semantic_hash": "4e37172c11ad03a1b709979465e1b034"
+  },
+  "dashboard/lib/api.ts": {
+    "mtime": 1782403936.9111586,
+    "ast_hash": "98735cc91036e6dc15805cd61f7181c8",
+    "semantic_hash": "98735cc91036e6dc15805cd61f7181c8"
+  },
+  "dashboard/lib/format.ts": {
+    "mtime": 1782403936.912671,
+    "ast_hash": "70fa8bad23ec3d0e56ddea7b4416d02b",
+    "semantic_hash": "70fa8bad23ec3d0e56ddea7b4416d02b"
+  },
+  "dashboard/lib/types.ts": {
+    "mtime": 1782403936.912671,
+    "ast_hash": "2051bfd19bcda496fb7f7811770c655d",
+    "semantic_hash": "2051bfd19bcda496fb7f7811770c655d"
+  },
+  "dashboard/next.config.js": {
+    "mtime": 1782403936.9139524,
+    "ast_hash": "d5ec4d32947b85f4ab0e0446643c49ca",
+    "semantic_hash": "d5ec4d32947b85f4ab0e0446643c49ca"
+  },
+  "dashboard/package.json": {
+    "mtime": 1782403936.9150283,
+    "ast_hash": "0be28a0faac57d935559bf1a6b8f5bc3",
+    "semantic_hash": "0be28a0faac57d935559bf1a6b8f5bc3"
+  },
+  "dashboard/postcss.config.js": {
+    "mtime": 1782403936.916098,
+    "ast_hash": "9a248c780e4c76f85b0f492f63a3d417",
+    "semantic_hash": "9a248c780e4c76f85b0f492f63a3d417"
+  },
+  "dashboard/tailwind.config.ts": {
+    "mtime": 1782403936.916098,
+    "ast_hash": "4157626ae7b13d07a4c09b146231e84d",
+    "semantic_hash": "4157626ae7b13d07a4c09b146231e84d"
+  },
+  "dashboard/tsconfig.json": {
+    "mtime": 1782403936.9175806,
+    "ast_hash": "05f720c942cecd342a56c57aa0a8ed2c",
+    "semantic_hash": "05f720c942cecd342a56c57aa0a8ed2c"
+  },
+  "init-db.sql": {
+    "mtime": 1782403937.1478233,
+    "ast_hash": "245ea903d3f097290adab3cf39c62056",
+    "semantic_hash": "245ea903d3f097290adab3cf39c62056"
+  },
+  "test_camera.py": {
+    "mtime": 1782403937.1478233,
+    "ast_hash": "58c066b361b942575d1a99da1c75f920",
+    "semantic_hash": "58c066b361b942575d1a99da1c75f920"
+  },
+  ".agents/rules/graphify.md": {
+    "mtime": 1782404795.4423954,
+    "ast_hash": "a0e4d192b9e2e17256124dbfc8e24e6a",
+    "semantic_hash": "a0e4d192b9e2e17256124dbfc8e24e6a"
+  },
+  ".agents/workflows/graphify.md": {
+    "mtime": 1782404795.4439049,
+    "ast_hash": "637776aa6f7496d069afe7520c845c8a",
+    "semantic_hash": "637776aa6f7496d069afe7520c845c8a"
+  },
+  ".graphify_chunk_00_files.txt": {
+    "mtime": 1782403936.819255,
+    "ast_hash": "936807d95e9d8e8bf9bafe46ffb267ba",
+    "semantic_hash": "936807d95e9d8e8bf9bafe46ffb267ba"
+  },
+  ".graphify_chunk_01_files.txt": {
+    "mtime": 1782403936.821606,
+    "ast_hash": "1cdc6c90d0b4b46d7ec9e455a9bf6acc",
+    "semantic_hash": "1cdc6c90d0b4b46d7ec9e455a9bf6acc"
+  },
+  ".graphify_chunk_02_files.txt": {
+    "mtime": 1782403936.821606,
+    "ast_hash": "ac7a4a8bc622e1fc05a5bd257c8022e1",
+    "semantic_hash": "ac7a4a8bc622e1fc05a5bd257c8022e1"
+  },
+  ".graphify_chunk_03_files.txt": {
+    "mtime": 1782403936.821606,
+    "ast_hash": "47bda456875b4f90af5d6c68544e2881",
+    "semantic_hash": "47bda456875b4f90af5d6c68544e2881"
+  },
+  ".graphify_chunk_04_files.txt": {
+    "mtime": 1782403936.82328,
+    "ast_hash": "0af75fa9c801590c15d882de59e50da6",
+    "semantic_hash": "0af75fa9c801590c15d882de59e50da6"
+  },
+  ".graphify_chunk_05_files.txt": {
+    "mtime": 1782403936.82328,
+    "ast_hash": "672d0ba2465b2ce56515561105a46c2f",
+    "semantic_hash": "672d0ba2465b2ce56515561105a46c2f"
+  },
+  ".graphify_chunk_06_files.txt": {
+    "mtime": 1782403936.8249023,
+    "ast_hash": "2950a6c9a1f21b53fd25c8d7c84570cd",
+    "semantic_hash": "2950a6c9a1f21b53fd25c8d7c84570cd"
+  },
+  ".graphify_chunk_07_files.txt": {
+    "mtime": 1782403936.8249023,
+    "ast_hash": "b54d46090cfbce9e5c92fa59626a6a7b",
+    "semantic_hash": "b54d46090cfbce9e5c92fa59626a6a7b"
+  },
+  ".graphify_chunk_08_files.txt": {
+    "mtime": 1782403936.8249023,
+    "ast_hash": "617fa6b6cdba4d700ecf43d34ab50361",
+    "semantic_hash": "617fa6b6cdba4d700ecf43d34ab50361"
+  },
+  ".graphify_chunk_09_files.txt": {
+    "mtime": 1782403936.826862,
+    "ast_hash": "f05e08f26a695acf02e03e102322c876",
+    "semantic_hash": "f05e08f26a695acf02e03e102322c876"
+  },
+  ".graphify_uncached.txt": {
+    "mtime": 1782403936.8369305,
+    "ast_hash": "3829b2b29372f8d156eb626aed171e2f",
+    "semantic_hash": "3829b2b29372f8d156eb626aed171e2f"
+  },
+  "ADVANCED_OPTIMIZATION_AND_DEDUPLICATION_PLAN.md": {
+    "mtime": 1782403936.8382127,
+    "ast_hash": "bb728f4fdf38445e8f150385e7417960",
+    "semantic_hash": "bb728f4fdf38445e8f150385e7417960"
+  },
+  "IMPROVEMENT_PLAN.md": {
+    "mtime": 1782403936.8389513,
+    "ast_hash": "035740941907e08f76213fa193fc862d",
+    "semantic_hash": "035740941907e08f76213fa193fc862d"
+  },
+  "README.md": {
+    "mtime": 1782403936.8389513,
+    "ast_hash": "6a1e0c035ca171f56d06bbce4d3fa6d5",
+    "semantic_hash": "6a1e0c035ca171f56d06bbce4d3fa6d5"
+  },
+  "backend/requirements.txt": {
+    "mtime": 1782403936.8794613,
+    "ast_hash": "a50b135d6371502900145a2874b11267",
+    "semantic_hash": "a50b135d6371502900145a2874b11267"
+  },
+  "dashboard/README.md": {
+    "mtime": 1782403936.8844924,
+    "ast_hash": "c2c074d6a6a44e84240146ac06c5e860",
+    "semantic_hash": "c2c074d6a6a44e84240146ac06c5e860"
+  },
+  "docker-compose.yml": {
+    "mtime": 1782403936.9175806,
+    "ast_hash": "91a5b23ffaaa34ed4ef1a7188d4a1126",
+    "semantic_hash": "91a5b23ffaaa34ed4ef1a7188d4a1126"
   }
 }
