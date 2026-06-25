@@ -6,8 +6,8 @@ import Link from "next/link";
 import useSWR, { useSWRConfig } from "swr";
 import { ArrowLeft, GitMerge, Save, ShieldCheck, ShieldX, Trash2, UserCog } from "lucide-react";
 
-import { api, fetcher } from "@/lib/api";
-import type { VisitorDetail, VisitListResponse } from "@/lib/types";
+import { api, fetcher, imageUrl } from "@/lib/api";
+import type { VisitorDetail, VisitListResponse, VisitorFaceItem } from "@/lib/types";
 import { formatDateTime, formatDuration, relativeTime } from "@/lib/format";
 import { VisitorAvatar } from "@/components/visitor-table";
 import { MonthlyBar } from "@/components/charts";
@@ -72,6 +72,10 @@ export default function VisitorProfilePage() {
   );
   const { data: insights } = useSWR<GalleryInsights>(
     `visitors/${id}/gallery-insights`,
+    fetcher,
+  );
+  const { data: faces } = useSWR<VisitorFaceItem[]>(
+    `visitors/${id}/faces`,
     fetcher,
   );
 
@@ -285,6 +289,39 @@ export default function VisitorProfilePage() {
               </ul>
             </div>
           )}
+        </Card>
+      )}
+
+      {/* Stored faces (recognition gallery) */}
+      {faces && faces.length > 0 && (
+        <Card>
+          <CardTitle>Stored Faces ({faces.length})</CardTitle>
+          <p className="mb-3 text-sm text-text-secondary">
+            The face crops behind this person&apos;s recognition embeddings — what the
+            system compares against to recognise them on future visits.
+          </p>
+          <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
+            {faces.map((f) => (
+              <div key={f.id} className="space-y-1">
+                {f.crop_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={imageUrl(f.crop_url)}
+                    alt={f.pose_bin ?? "face"}
+                    className="aspect-square w-full rounded-control border border-card/60 object-cover"
+                  />
+                ) : (
+                  <div className="flex aspect-square w-full items-center justify-center rounded-control border border-card/60 bg-card/40 text-[10px] text-text-muted">
+                    no crop
+                  </div>
+                )}
+                <div className="flex items-center justify-between text-[10px] text-text-muted">
+                  <span className="truncate">{f.pose_bin ?? "—"}</span>
+                  <span>{f.det_score != null ? f.det_score.toFixed(2) : ""}</span>
+                </div>
+              </div>
+            ))}
+          </div>
         </Card>
       )}
 

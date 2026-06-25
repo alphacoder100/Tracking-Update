@@ -204,6 +204,64 @@ async def get_gallery_insights(
     }
 
 
+@router.get("/{visitor_id}/faces")
+async def get_visitor_faces(
+    visitor_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _key: str = Security(verify_api_key),
+):
+    """List every stored gallery face for a visitor (the crops behind their
+    recognition embeddings), best-quality first, each with a servable crop URL."""
+    from app.models import VisitorFace
+
+    visitor = await db.get(Visitor, visitor_id)
+    if visitor is None or not visitor.is_active:
+        raise HTTPException(status_code=404, detail="Visitor not found.")
+
+    faces = (
+        await db.execute(
+            select(VisitorFace)
+            .where(VisitorFace.visitor_id == visitor_id)
+            .order_by(VisitorFace.det_score.desc().nullslast())
+        )
+    ).scalars().all()
+
+    return [
+        {
+            "id": str(f.id),
+            "det_score": f.det_score,
+            "clarity_score": f.clarity_score,
+            "pose_bin": f.pose_bin,
+            "yaw": f.yaw,
+            "source_camera_id": f.source_camera_id,
+            "created_at": f.created_at.isoformat() if f.created_at else None,
+            "crop_url": (
+                f"/api/visitors/{visitor_id}/faces/{f.id}/crop" if f.crop_path else None
+            ),
+        }
+        for f in faces
+    ]
+
+
+@router.get("/{visitor_id}/faces/{face_id}/crop")
+async def get_visitor_face_crop(
+    visitor_id: UUID,
+    face_id: UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """Serve one stored face crop image (no auth, like the thumbnail — rendered in
+    an <img> via the same-origin proxy)."""
+    from app.models import VisitorFace
+
+    face = await db.get(VisitorFace, face_id)
+    if face is None or face.visitor_id != visitor_id or not face.crop_path:
+        raise HTTPException(status_code=404, detail="Face crop not found.")
+    path = Path(face.crop_path)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Face crop file missing.")
+    return FileResponse(str(path), media_type="image/jpeg")
+
+
 @router.get("/{visitor_id}/visits", response_model=VisitListResponse)
 async def get_visitor_visits(
     visitor_id: UUID,

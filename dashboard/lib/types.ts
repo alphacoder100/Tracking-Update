@@ -61,6 +61,18 @@ export interface VisitListResponse {
   visits: VisitSummary[];
 }
 
+// One stored gallery face for a visitor (GET /api/visitors/{id}/faces).
+export interface VisitorFaceItem {
+  id: string;
+  det_score: number | null;
+  clarity_score: number | null;
+  pose_bin: string | null;
+  yaw: number | null;
+  source_camera_id: string | null;
+  created_at: string | null;
+  crop_url: string | null;
+}
+
 export interface CameraStatus {
   is_running: boolean;
   source: string | null;
