@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import {
   Area,
   AreaChart,
@@ -10,10 +11,15 @@ import {
   Pie,
   PieChart,
   ResponsiveContainer,
+  Scatter,
+  ScatterChart,
   Tooltip,
   XAxis,
   YAxis,
+  ZAxis,
 } from "recharts";
+
+import type { EmbeddingCentroid, EmbeddingFacePoint } from "@/lib/types";
 
 const AXIS = "#94A3B8";
 const GRID = "#334155";
@@ -183,6 +189,123 @@ export function DetectionQualityBar({
         ))}
       </div>
     </div>
+  );
+}
+
+const EMBED_PALETTE = [
+  "#3B82F6", "#8B5CF6", "#10B981", "#F59E0B", "#EF4444", "#06B6D4",
+  "#EC4899", "#A3E635", "#F97316", "#14B8A6", "#6366F1", "#D946EF",
+];
+
+/**
+ * 2D PCA projection of the face-embedding vector DB. Small dots are individual
+ * gallery faces; larger ringed markers are per-visitor centroids — all colored
+ * per visitor. Tight same-color clusters are good; a visitor's faces scattered
+ * far apart hints at a contaminated gallery, and two different-colored centroids
+ * sitting on top of each other are likely the same person split in two.
+ */
+export function EmbeddingScatter({
+  centroids,
+  faces,
+}: {
+  centroids: EmbeddingCentroid[];
+  faces: EmbeddingFacePoint[];
+}) {
+  const colorFor = useMemo(() => {
+    const m = new Map<string, string>();
+    centroids.forEach((c, i) => m.set(c.visitor_id, EMBED_PALETTE[i % EMBED_PALETTE.length]));
+    return (id: string) => m.get(id) ?? "#64748B";
+  }, [centroids]);
+
+  const nameFor = useMemo(() => {
+    const m = new Map<string, string>();
+    centroids.forEach((c) =>
+      m.set(c.visitor_id, c.name || `Visitor ${c.visitor_id.slice(0, 8)}`),
+    );
+    return (id: string) => m.get(id) ?? `Visitor ${id.slice(0, 8)}`;
+  }, [centroids]);
+
+  if (centroids.length === 0) {
+    return (
+      <div className="flex h-[360px] items-center justify-center text-sm text-text-secondary">
+        No visitor embeddings yet.
+      </div>
+    );
+  }
+
+  const FaceShape = (p: { cx?: number; cy?: number; payload?: EmbeddingFacePoint }) => {
+    if (p.cx == null || p.cy == null || !p.payload) return <g />;
+    return (
+      <circle cx={p.cx} cy={p.cy} r={3} fill={colorFor(p.payload.visitor_id)} fillOpacity={0.45} />
+    );
+  };
+
+  const CentroidShape = (p: { cx?: number; cy?: number; payload?: EmbeddingCentroid }) => {
+    if (p.cx == null || p.cy == null || !p.payload) return <g />;
+    return (
+      <circle
+        cx={p.cx}
+        cy={p.cy}
+        r={7}
+        fill={colorFor(p.payload.visitor_id)}
+        stroke="#0B1220"
+        strokeWidth={2}
+      />
+    );
+  };
+
+  const TipContent = ({
+    active,
+    payload,
+  }: {
+    active?: boolean;
+    payload?: { payload?: EmbeddingFacePoint | EmbeddingCentroid }[];
+  }) => {
+    const pt = active && payload?.length ? payload[0]?.payload : undefined;
+    if (!pt) return null;
+    const isCentroid = "gallery_size" in pt;
+    return (
+      <div style={tooltipStyle} className="px-2.5 py-1.5">
+        <span
+          className="mr-1.5 inline-block h-2 w-2 rounded-sm align-middle"
+          style={{ backgroundColor: colorFor(pt.visitor_id) }}
+        />
+        {nameFor(pt.visitor_id)}
+        {isCentroid && (
+          <span style={{ color: AXIS }}> · centroid</span>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <ResponsiveContainer width="100%" height={360}>
+      <ScatterChart margin={{ top: 10, right: 16, bottom: 8, left: 0 }}>
+        <XAxis
+          type="number"
+          dataKey="x"
+          name="PC1"
+          tick={false}
+          axisLine={{ stroke: GRID }}
+          label={{ value: "PC1", position: "insideBottom", fill: AXIS, fontSize: 11 }}
+        />
+        <YAxis
+          type="number"
+          dataKey="y"
+          name="PC2"
+          tick={false}
+          axisLine={{ stroke: GRID }}
+          label={{ value: "PC2", angle: -90, position: "insideLeft", fill: AXIS, fontSize: 11 }}
+        />
+        <ZAxis range={[40, 40]} />
+        <Tooltip
+          cursor={{ strokeDasharray: "3 3", stroke: GRID }}
+          content={<TipContent />}
+        />
+        <Scatter data={faces} shape={FaceShape} isAnimationActive={false} />
+        <Scatter data={centroids} shape={CentroidShape} isAnimationActive={false} />
+      </ScatterChart>
+    </ResponsiveContainer>
   );
 }
 

@@ -5,11 +5,15 @@ import Link from "next/link";
 import useSWR from "swr";
 import {
   AlertTriangle,
+  ArrowLeftRight,
   ArrowRight,
+  Boxes,
   BrainCircuit,
   CheckCircle2,
   Cpu,
   Gauge,
+  GitMerge,
+  Layers,
   ScanFace,
   ShieldAlert,
   ShieldCheck,
@@ -23,11 +27,13 @@ import type {
   ConfidenceWeightedSummary,
   DetectionQuality,
   DeviceStatus,
+  EmbeddingCentroid,
+  EmbeddingDiagnostics,
   HealthResponse,
   PipelineQuality,
   ReviewFlag,
 } from "@/lib/types";
-import { DetectionQualityBar } from "@/components/charts";
+import { DetectionQualityBar, EmbeddingScatter, MonthlyBar } from "@/components/charts";
 import { StatCard } from "@/components/stat-card";
 import { Badge, Button, Card, CardTitle, PageHeader } from "@/components/ui";
 import { relativeTime, shortId } from "@/lib/format";
@@ -73,10 +79,20 @@ export default function AiDiagnosticsPage() {
     fetcher,
     { refreshInterval: 20000 },
   );
+  // Vector-DB diagnostics — heavier + fairly static, so no auto-refresh.
+  const { data: emb } = useSWR<EmbeddingDiagnostics>("analytics/embeddings", fetcher);
 
   const cw = summary?.confidence_weighted;
   const reviewCount = flags?.length ?? 0;
   const totalDetections = pipeline?.total_detections ?? quality?.total_detections;
+
+  const GALLERY_BUCKETS = ["0-1", "2-5", "6-10", "11-20", "21+"];
+  const gallerySizeData = emb
+    ? GALLERY_BUCKETS.map((b) => ({
+        label: b,
+        value: emb.gallery_size_distribution[b] ?? 0,
+      }))
+    : [];
 
   return (
     <div className="space-y-6">
@@ -351,7 +367,178 @@ export default function AiDiagnosticsPage() {
           </ul>
         )}
       </Card>
+
+      {/* ── Vector DB explorer ── */}
+      <div className="pt-2">
+        <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.1em] text-text-secondary">
+          <Boxes className="h-4 w-4 text-text-muted" /> Vector DB Explorer
+        </h2>
+        <p className="mt-1 text-sm text-text-muted">
+          The actual face-embedding vectors — projected and compared — to spot
+          split identities, contaminated galleries, and confusable people.
+        </p>
+      </div>
+
+      <Card>
+        <CardTitle icon={<Boxes className="h-4 w-4" />}>Embedding Map (PCA)</CardTitle>
+        <EmbeddingScatter
+          centroids={emb?.centroids ?? []}
+          faces={emb?.faces ?? []}
+        />
+        <p className="mt-2 text-center text-xs text-text-muted">
+          {emb
+            ? `${emb.visitor_count} visitors · ${emb.face_count.toLocaleString()} gallery faces · PC1+PC2 capture ${pct(
+                (emb.explained_variance[0] ?? 0) + (emb.explained_variance[1] ?? 0),
+              )} of variance · big ring = centroid, small dot = one face`
+            : "—"}
+        </p>
+      </Card>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <Card>
+          <CardTitle icon={<GitMerge className="h-4 w-4" />}>
+            Confusable / Merge Candidates
+          </CardTitle>
+          <p className="mb-3 text-sm text-text-secondary">
+            Distinct visitors whose centroids sit close together — likely the same
+            person split in two, or people the recognizer may swap.
+          </p>
+          {emb && emb.merge_candidates.length > 0 ? (
+            <ul className="divide-y divide-card/40">
+              {emb.merge_candidates.map((m) => (
+                <li
+                  key={`${m.a_id}-${m.b_id}`}
+                  className="flex items-center justify-between gap-3 py-2.5 text-sm"
+                >
+                  <div className="flex min-w-0 items-center gap-2">
+                    <Link
+                      href={`/visitors/${m.a_id}`}
+                      className="truncate font-medium text-text-primary hover:text-primary-bright"
+                    >
+                      {m.a_name || `Visitor ${shortId(m.a_id)}`}
+                    </Link>
+                    <ArrowLeftRight className="h-3.5 w-3.5 shrink-0 text-text-muted" />
+                    <Link
+                      href={`/visitors/${m.b_id}`}
+                      className="truncate font-medium text-text-primary hover:text-primary-bright"
+                    >
+                      {m.b_name || `Visitor ${shortId(m.b_id)}`}
+                    </Link>
+                  </div>
+                  <Badge tone={m.similarity >= 0.6 ? "danger" : "warning"}>
+                    {(m.similarity * 100).toFixed(0)}%
+                  </Badge>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="py-8 text-center text-sm text-text-secondary">
+              {emb
+                ? "No confusable pairs above 45% — identities look well separated."
+                : "—"}
+            </p>
+          )}
+        </Card>
+
+        <Card>
+          <CardTitle icon={<ScanFace className="h-4 w-4" />}>Nearest Neighbors</CardTitle>
+          <p className="mb-3 text-sm text-text-secondary">
+            Each visitor&apos;s closest other identities by face similarity.
+          </p>
+          <ul className="max-h-[320px] space-y-2 overflow-y-auto pr-1">
+            {(emb?.confusion ?? []).map((c) => (
+              <li key={c.visitor_id} className="text-sm">
+                <Link
+                  href={`/visitors/${c.visitor_id}`}
+                  className="font-medium text-text-primary hover:text-primary-bright"
+                >
+                  {c.name || `Visitor ${shortId(c.visitor_id)}`}
+                </Link>
+                <span className="ml-2 text-xs text-text-muted">
+                  {c.neighbors.length
+                    ? c.neighbors
+                        .map(
+                          (n) =>
+                            `${n.name || shortId(n.visitor_id)} ${(n.similarity * 100).toFixed(0)}%`,
+                        )
+                        .join(" · ")
+                    : "—"}
+                </span>
+              </li>
+            ))}
+            {(emb?.confusion ?? []).length === 0 && (
+              <li className="py-6 text-center text-text-secondary">—</li>
+            )}
+          </ul>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <Card>
+          <CardTitle icon={<ShieldCheck className="h-4 w-4" />}>Gallery Cohesion</CardTitle>
+          <p className="mb-3 text-sm text-text-secondary">
+            Mean similarity within each visitor&apos;s own gallery. Low (red)
+            suggests the gallery mixes more than one person.
+          </p>
+          <CohesionList centroids={emb?.centroids ?? []} />
+        </Card>
+        <Card>
+          <CardTitle icon={<Layers className="h-4 w-4" />}>
+            Gallery Size Distribution
+          </CardTitle>
+          <MonthlyBar data={gallerySizeData} />
+          <p className="mt-1 text-center text-xs text-text-muted">
+            visitors by number of stored faces
+          </p>
+        </Card>
+      </div>
     </div>
+  );
+}
+
+function CohesionList({ centroids }: { centroids: EmbeddingCentroid[] }) {
+  const rows = [...centroids]
+    .filter((c) => c.gallery_size >= 2 && c.cohesion != null)
+    .sort((a, b) => (a.cohesion ?? 1) - (b.cohesion ?? 1));
+
+  if (rows.length === 0) {
+    return (
+      <p className="py-8 text-center text-sm text-text-secondary">
+        Not enough gallery faces to measure cohesion yet.
+      </p>
+    );
+  }
+
+  return (
+    <ul className="max-h-[320px] space-y-2 overflow-y-auto pr-1">
+      {rows.map((c) => {
+        const v = c.cohesion ?? 0;
+        const color = v < 0.3 ? "#EF4444" : v < 0.45 ? "#F59E0B" : "#10B981";
+        return (
+          <li key={c.visitor_id}>
+            <div className="mb-0.5 flex items-center justify-between text-xs">
+              <Link
+                href={`/visitors/${c.visitor_id}`}
+                className="truncate text-text-secondary hover:text-primary-bright"
+              >
+                {c.name || `Visitor ${shortId(c.visitor_id)}`}{" "}
+                <span className="text-text-muted">({c.gallery_size})</span>
+              </Link>
+              <span className="tnum text-text-primary">{(v * 100).toFixed(0)}%</span>
+            </div>
+            <div className="h-2 w-full overflow-hidden rounded-full bg-card/40">
+              <div
+                className="h-full rounded-full"
+                style={{
+                  width: `${Math.max(0, Math.min(100, v * 100))}%`,
+                  backgroundColor: color,
+                }}
+              />
+            </div>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 

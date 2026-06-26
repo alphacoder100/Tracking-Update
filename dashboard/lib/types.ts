@@ -251,6 +251,54 @@ export interface GateStats {
   recent_passes: GatePass[];
 }
 
+// Vector-DB / embedding diagnostics (from GET /api/analytics/embeddings).
+export interface EmbeddingCentroid {
+  visitor_id: string;
+  name: string | null;
+  is_staff: boolean;
+  gallery_size: number;
+  cohesion: number | null;
+  x: number;
+  y: number;
+}
+
+export interface EmbeddingFacePoint {
+  visitor_id: string;
+  x: number;
+  y: number;
+}
+
+export interface EmbeddingNeighbor {
+  visitor_id: string;
+  name: string | null;
+  similarity: number;
+}
+
+export interface EmbeddingConfusion {
+  visitor_id: string;
+  name: string | null;
+  neighbors: EmbeddingNeighbor[];
+}
+
+export interface EmbeddingMergeCandidate {
+  a_id: string;
+  a_name: string | null;
+  b_id: string;
+  b_name: string | null;
+  similarity: number;
+}
+
+export interface EmbeddingDiagnostics {
+  visitor_count: number;
+  face_count: number;
+  explained_variance: number[];
+  centroids: EmbeddingCentroid[];
+  faces: EmbeddingFacePoint[];
+  confusion: EmbeddingConfusion[];
+  merge_candidates: EmbeddingMergeCandidate[];
+  gallery_size_distribution: Record<string, number>;
+}
+
 // Runtime-editable admin settings (from GET/PATCH /api/admin/settings).
 export type AdminSettings = Record<string, number | boolean | string>;
 

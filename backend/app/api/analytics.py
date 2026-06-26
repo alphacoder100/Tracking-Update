@@ -98,3 +98,14 @@ async def analytics_gate(
 ):
     """Entry→exit gate counting status + completed-visit counts (two-camera)."""
     return await analytics_service.gate_stats(db)
+
+
+@router.get("/embeddings")
+async def analytics_embeddings(
+    db: AsyncSession = Depends(get_db),
+    _key: str = Security(verify_api_key),
+):
+    """Vector-DB diagnostics: 2D PCA embedding map, confusable/merge-candidate
+    pairs, per-visitor gallery cohesion, and gallery-size distribution — for
+    debugging face-matching issues."""
+    return await analytics_service.embedding_diagnostics(db)

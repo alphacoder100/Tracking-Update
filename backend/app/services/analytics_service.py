@@ -7,10 +7,13 @@ don't inflate unique-visitor counts.
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from sqlalchemy import text
+import numpy as np
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.models import Visitor, VisitorFace
+from app.similarity import pairwise_cosine
 
 
 def _range(since: Optional[datetime], until: Optional[datetime]) -> tuple[datetime, datetime]:
@@ -370,4 +373,215 @@ async def gate_stats(db: AsyncSession, limit: int = 10) -> dict:
         "completed_total": int(counts.completed_total or 0),
         "inside": [pass_dict(r) for r in inside],
         "recent_passes": [pass_dict(r) for r in recent],
+    }
+
+
+# ── Embedding / vector-DB diagnostics ────────────────────────────────────────
+
+# Caps so the scatter payload stays bounded regardless of gallery size.
+_PLOT_MAX_FACES_PER_VISITOR = 40
+_PLOT_MAX_FACES_TOTAL = 4000
+_CONFUSION_TOP_K = 5
+# Two DISTINCT visitors whose centroids are this close are suspicious — either a
+# split identity (should merge) or a confusable pair the recognizer may swap.
+_MERGE_CANDIDATE_MIN_SIM = 0.45
+
+
+def _to_vec(v) -> Optional[np.ndarray]:
+    """Coerce a stored pgvector (ndarray or list) into a float32 vector, or None."""
+    if v is None:
+        return None
+    arr = np.asarray(v, dtype=np.float32)
+    return arr if arr.size else None
+
+
+def _pca_2d(fit: np.ndarray):
+    """Fit a 2-component PCA via SVD. Returns (mean, components(2,d), explained(2,))."""
+    mean = fit.mean(axis=0).astype(np.float32)
+    centered = fit - mean
+    # Economy SVD: rows of Vt are the principal axes, S² ∝ variance per axis.
+    _, s, vt = np.linalg.svd(centered, full_matrices=False)
+    d = fit.shape[1]
+    comps = np.zeros((2, d), dtype=np.float32)
+    explained = np.zeros(2, dtype=np.float32)
+    k = min(2, vt.shape[0])
+    comps[:k] = vt[:k]
+    var = s ** 2
+    total = float(var.sum()) or 1.0
+    explained[:k] = (var[:k] / total).astype(np.float32)
+    return mean, comps, explained
+
+
+def _project(x: np.ndarray, mean: np.ndarray, comps: np.ndarray) -> np.ndarray:
+    return (x - mean) @ comps.T
+
+
+async def embedding_diagnostics(db: AsyncSession) -> dict:
+    """
+    Vector-DB diagnostics for debugging face matching:
+      • centroids/faces — 2D PCA projection of the 512-d embeddings, so split
+        identities and contaminated galleries are visible at a glance.
+      • confusion / merge_candidates — nearest centroids per visitor + distinct
+        pairs that sit suspiciously close (likely confusions / false splits).
+      • cohesion (on each centroid) — mean within-gallery similarity; low ⇒ the
+        visitor's gallery mixes more than one person.
+      • gallery_size_distribution — faces per visitor (sparse ⇒ weak recall).
+    Staff are included (they are still matchable identities); soft-deleted
+    visitors are excluded.
+    """
+    empty = {
+        "visitor_count": 0,
+        "face_count": 0,
+        "explained_variance": [0.0, 0.0],
+        "centroids": [],
+        "faces": [],
+        "confusion": [],
+        "merge_candidates": [],
+        "gallery_size_distribution": {},
+    }
+
+    vrows = (await db.execute(
+        select(Visitor.id, Visitor.name, Visitor.is_staff, Visitor.face_embedding)
+        .where(Visitor.is_active.is_(True))
+    )).all()
+
+    visitors: list[dict] = []
+    uuid_ids: list = []
+    cents: list[np.ndarray] = []
+    for r in vrows:
+        vec = _to_vec(r.face_embedding)
+        if vec is None:
+            continue
+        visitors.append({
+            "visitor_id": str(r.id),
+            "name": r.name,
+            "is_staff": bool(r.is_staff),
+            "gallery_size": 0,
+            "cohesion": None,
+        })
+        uuid_ids.append(r.id)
+        cents.append(vec)
+
+    if not cents:
+        return empty
+
+    centroids = np.vstack(cents).astype(np.float32)  # (V, 512)
+
+    # Gallery faces for these visitors (bounded for safety).
+    faces_by_v: dict[str, list[np.ndarray]] = {}
+    frows = (await db.execute(
+        select(VisitorFace.visitor_id, VisitorFace.embedding)
+        .where(VisitorFace.visitor_id.in_(uuid_ids))
+        .limit(50000)
+    )).all()
+    for r in frows:
+        vec = _to_vec(r.embedding)
+        if vec is None:
+            continue
+        faces_by_v.setdefault(str(r.visitor_id), []).append(vec)
+
+    # Per-visitor gallery size + within-gallery cohesion (embeddings are
+    # L2-normalized, so pairwise_cosine's assume-normalized path is correct).
+    all_faces: list[np.ndarray] = []
+    for v in visitors:
+        fl = faces_by_v.get(v["visitor_id"], [])
+        v["gallery_size"] = len(fl)
+        all_faces.extend(fl)
+        if len(fl) >= 2:
+            sims = pairwise_cosine(fl)
+            if sims.size:
+                v["cohesion"] = round(float(np.mean(sims)), 4)
+
+    # Fit PCA on the face manifold (fall back to centroids if no faces yet).
+    fit = np.vstack(all_faces + cents).astype(np.float32) if all_faces else centroids
+    mean, comps, explained = _pca_2d(fit)
+
+    cent_2d = _project(centroids, mean, comps)
+    for i, v in enumerate(visitors):
+        v["x"] = round(float(cent_2d[i, 0]), 4)
+        v["y"] = round(float(cent_2d[i, 1]), 4)
+
+    faces_out: list[dict] = []
+    for v in visitors:
+        if len(faces_out) >= _PLOT_MAX_FACES_TOTAL:
+            break
+        take = faces_by_v.get(v["visitor_id"], [])[:_PLOT_MAX_FACES_PER_VISITOR]
+        if not take:
+            continue
+        pts = _project(np.vstack(take).astype(np.float32), mean, comps)
+        for p in pts:
+            faces_out.append({
+                "visitor_id": v["visitor_id"],
+                "x": round(float(p[0]), 4),
+                "y": round(float(p[1]), 4),
+            })
+            if len(faces_out) >= _PLOT_MAX_FACES_TOTAL:
+                break
+
+    # Centroid-vs-centroid cosine (re-normalize defensively).
+    norms = np.linalg.norm(centroids, axis=1, keepdims=True)
+    norms[norms == 0] = 1.0
+    unit = centroids / norms
+    sim = unit @ unit.T  # (V, V), 1.0 on the diagonal
+
+    confusion: list[dict] = []
+    merge_candidates: list[dict] = []
+    v_count = len(visitors)
+    k = min(_CONFUSION_TOP_K, max(0, v_count - 1))
+    for i, v in enumerate(visitors):
+        neighbors = []
+        if k:
+            row = sim[i].copy()
+            row[i] = -1.0  # exclude self
+            for j in np.argsort(-row)[:k]:
+                neighbors.append({
+                    "visitor_id": visitors[j]["visitor_id"],
+                    "name": visitors[j]["name"],
+                    "similarity": round(float(sim[i, j]), 4),
+                })
+        confusion.append({
+            "visitor_id": v["visitor_id"],
+            "name": v["name"],
+            "neighbors": neighbors,
+        })
+
+    for i in range(v_count):
+        for j in range(i + 1, v_count):
+            s = float(sim[i, j])
+            if s >= _MERGE_CANDIDATE_MIN_SIM:
+                merge_candidates.append({
+                    "a_id": visitors[i]["visitor_id"],
+                    "a_name": visitors[i]["name"],
+                    "b_id": visitors[j]["visitor_id"],
+                    "b_name": visitors[j]["name"],
+                    "similarity": round(s, 4),
+                })
+    merge_candidates.sort(key=lambda d: -d["similarity"])
+    merge_candidates = merge_candidates[:50]
+
+    def _bucket(n: int) -> str:
+        if n <= 1:
+            return "0-1"
+        if n <= 5:
+            return "2-5"
+        if n <= 10:
+            return "6-10"
+        if n <= 20:
+            return "11-20"
+        return "21+"
+
+    dist: dict[str, int] = {}
+    for v in visitors:
+        b = _bucket(v["gallery_size"])
+        dist[b] = dist.get(b, 0) + 1
+
+    return {
+        "visitor_count": v_count,
+        "face_count": len(all_faces),
+        "explained_variance": [round(float(explained[0]), 4), round(float(explained[1]), 4)],
+        "centroids": visitors,
+        "faces": faces_out,
+        "confusion": confusion,
+        "merge_candidates": merge_candidates,
+        "gallery_size_distribution": dist,
     }
