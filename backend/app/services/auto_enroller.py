@@ -555,6 +555,29 @@ async def update_after_match(
             visitor.thumbnail_path = thumb
 
 
+async def refresh_thumbnail_from_best_face(db: AsyncSession, visitor: Visitor) -> bool:
+    """Re-point a visitor's avatar at the highest-quality surviving gallery crop.
+    Used after a gallery edit (face delete / merge) where the previous thumbnail
+    may have belonged to a now-removed face, or where a merged-in profile has a
+    clearer face. Mutates `visitor` WITHOUT committing. Returns True on update."""
+    best = (
+        await db.execute(
+            select(VisitorFace)
+            .where(VisitorFace.visitor_id == visitor.id)
+            .order_by(VisitorFace.det_score.desc().nullslast())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if best is None or not best.crop_path or not Path(best.crop_path).exists():
+        return False
+    crop = await asyncio.to_thread(cv2.imread, best.crop_path)
+    thumb = await _save_thumbnail(visitor.id, crop)
+    if thumb:
+        visitor.thumbnail_path = thumb
+        return True
+    return False
+
+
 async def delete_gallery_face_and_recompute(
     db: AsyncSession, visitor: Visitor, face: VisitorFace
 ) -> None:
@@ -574,20 +597,7 @@ async def delete_gallery_face_and_recompute(
     # helpers see only the surviving faces.
     await recompute_centroid_from_gallery(db, visitor)
     await recompute_adaptive_thresholds(db, visitor)
-
-    best = (
-        await db.execute(
-            select(VisitorFace)
-            .where(VisitorFace.visitor_id == visitor.id)
-            .order_by(VisitorFace.det_score.desc().nullslast())
-            .limit(1)
-        )
-    ).scalar_one_or_none()
-    if best is not None and best.crop_path and Path(best.crop_path).exists():
-        crop = await asyncio.to_thread(cv2.imread, best.crop_path)
-        thumb = await _save_thumbnail(visitor.id, crop)
-        if thumb:
-            visitor.thumbnail_path = thumb
+    await refresh_thumbnail_from_best_face(db, visitor)
 
 
 async def clean_visitor_gallery(db: AsyncSession, visitor_id: UUID) -> dict:

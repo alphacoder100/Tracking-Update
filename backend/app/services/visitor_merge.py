@@ -27,8 +27,12 @@ class MergeError(Exception):
 
 
 async def _trim_gallery(db: AsyncSession, visitor_id: UUID) -> int:
-    """After a merge the pooled gallery can exceed the cap — drop the lowest
-    det_score faces back down to MAX_FACES_PER_VISITOR. Returns count removed."""
+    """After a merge the pooled gallery can exceed the cap — trim back down to
+    MAX_FACES_PER_VISITOR. POSE-AWARE: keep the best face of every angle first
+    (round-robin across pose bins by quality) so trimming never strips a whole
+    angle — that angle coverage is exactly what lets the merged profile recognise
+    the person at a side/down view on future visits. Returns count removed."""
+    from collections import defaultdict
     from app.services.auto_enroller import _delete_gallery_face
 
     faces = (
@@ -39,11 +43,31 @@ async def _trim_gallery(db: AsyncSession, visitor_id: UUID) -> int:
     cap = settings.MAX_FACES_PER_VISITOR
     if len(faces) <= cap:
         return 0
-    faces.sort(key=lambda f: (f.det_score or 0.0), reverse=True)
+
+    # Bucket by pose bin, best-quality first within each bin.
+    bins: dict[str, list] = defaultdict(list)
+    for f in faces:
+        bins[f.pose_bin or "unknown"].append(f)
+    for b in bins.values():
+        b.sort(key=lambda f: (f.det_score or 0.0), reverse=True)
+
+    # Round-robin: take the i-th best from each bin per pass until the cap is hit,
+    # so all bins keep their strongest faces before any bin over-fills.
+    keep_ids: set = set()
+    order = list(bins.values())
+    depth = max((len(b) for b in order), default=0)
+    for i in range(depth):
+        for b in order:
+            if i < len(b) and len(keep_ids) < cap:
+                keep_ids.add(b[i].id)
+        if len(keep_ids) >= cap:
+            break
+
     removed = 0
-    for f in faces[cap:]:
-        await _delete_gallery_face(db, f)
-        removed += 1
+    for f in faces:
+        if f.id not in keep_ids:
+            await _delete_gallery_face(db, f)
+            removed += 1
     return removed
 
 
@@ -109,9 +133,13 @@ async def merge_visitors(
     try:
         from app.services.auto_enroller import (
             recompute_centroid_from_gallery, recompute_adaptive_thresholds,
+            refresh_thumbnail_from_best_face,
         )
         await recompute_centroid_from_gallery(db, target)
         await recompute_adaptive_thresholds(db, target)
+        # Promote the clearest pooled crop to the kept profile's avatar — the
+        # merged-in profile may have had a better face than the target's.
+        await refresh_thumbnail_from_best_face(db, target)
     except Exception as exc:
         logger.warning(
             "Centroid recompute after merge %s→%s failed (%s) — keeping existing.",
