@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import useSWR from "swr";
 import {
   Activity as ActivityIcon,
@@ -9,12 +9,14 @@ import {
   DoorOpen,
   Film,
   Layers,
+  Maximize2,
   Radio,
   Repeat,
   SkipForward,
   Sparkles,
   UserPlus,
   Users,
+  X,
 } from "lucide-react";
 
 import { fetcher } from "@/lib/api";
@@ -64,16 +66,21 @@ function MiniMetric({ label, value }: { label: string; value: React.ReactNode })
   );
 }
 
+type CamTone = "success" | "primary";
+
 /** One labelled camera feed (Entry / Exit) with its own live status + per-camera
- *  counters, so a two-camera gate can be monitored side by side. */
+ *  counters, so a two-camera gate can be monitored side by side. Clicking the
+ *  feed opens an enlarged ("zoomed") view via `onZoom`. */
 function CameraPanel({
   role,
   cameraId,
   tone,
+  onZoom,
 }: {
   role: string;
   cameraId: string;
-  tone: "success" | "primary";
+  tone: CamTone;
+  onZoom?: () => void;
 }) {
   const [st, setSt] = useState<CameraStatus | null>(null);
   const running = !!st?.is_running;
@@ -90,7 +97,20 @@ function CameraPanel({
           {running ? `${st?.fps ?? "—"} fps` : "offline"}
         </span>
       </div>
-      <DetectionFeed cameraId={cameraId} onStatus={setSt} />
+      <button
+        type="button"
+        onClick={onZoom}
+        aria-label={`Zoom ${role} camera`}
+        className="group relative block w-full cursor-zoom-in overflow-hidden rounded-card"
+      >
+        <DetectionFeed cameraId={cameraId} onStatus={setSt} />
+        {/* Hover affordance — tells the user the feed is clickable to enlarge. */}
+        <span className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 transition group-hover:bg-black/25 group-hover:opacity-100">
+          <span className="flex items-center gap-1.5 rounded-full bg-black/70 px-3 py-1.5 text-xs font-medium text-white ring-1 ring-inset ring-white/20">
+            <Maximize2 className="h-3.5 w-3.5" /> Click to zoom
+          </span>
+        </span>
+      </button>
       <div className="grid grid-cols-3 gap-2">
         <MiniMetric label="Persons" value={st?.persons_detected ?? 0} />
         <MiniMetric label="New" value={st?.new_visitors ?? 0} />
@@ -100,8 +120,79 @@ function CameraPanel({
   );
 }
 
+/** Full-screen enlarged view of a single camera feed. Close via the X button,
+ *  the backdrop, or Escape. Polls a touch faster since it's the focused view. */
+function ZoomModal({
+  role,
+  cameraId,
+  tone,
+  onClose,
+}: {
+  role: string;
+  cameraId: string;
+  tone: CamTone;
+  onClose: () => void;
+}) {
+  const [st, setSt] = useState<CameraStatus | null>(null);
+  const running = !!st?.is_running;
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div
+        className="relative w-full max-w-5xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Badge tone={running ? tone : "neutral"} dot>
+              {role}
+            </Badge>
+            <span className="font-mono text-xs text-text-muted">{cameraId}</span>
+            <span className="text-xs text-text-muted">
+              {running ? `${st?.fps ?? "—"} fps` : "offline"}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close zoom"
+            className="rounded-control p-2 text-text-muted transition hover:bg-white/10 hover:text-text-primary"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <DetectionFeed cameraId={cameraId} onStatus={setSt} pollMs={250} />
+        <div className="mt-3 grid grid-cols-3 gap-3">
+          <MiniMetric label="Persons" value={st?.persons_detected ?? 0} />
+          <MiniMetric label="New" value={st?.new_visitors ?? 0} />
+          <MiniMetric label="Returning" value={st?.returning_visitors ?? 0} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function LiveMonitorPage() {
   const [cam, setCam] = useState<CameraStatus | null>(null);
+  // The camera currently enlarged in the zoom modal (null = none).
+  const [zoom, setZoom] = useState<{
+    role: string;
+    cameraId: string;
+    tone: CamTone;
+  } | null>(null);
 
   const { data: activity } = useSWR<ActivityResponse>("activity?limit=12", fetcher, {
     refreshInterval: 5000,
@@ -201,8 +292,22 @@ export default function LiveMonitorPage() {
       {/* ── Hero: dual entry/exit feeds, or single feed + telemetry ── */}
       {dualCam ? (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <CameraPanel role="Entry" cameraId={entryCam!} tone="success" />
-          <CameraPanel role="Exit" cameraId={exitCam!} tone="primary" />
+          <CameraPanel
+            role="Entry"
+            cameraId={entryCam!}
+            tone="success"
+            onZoom={() =>
+              setZoom({ role: "Entry", cameraId: entryCam!, tone: "success" })
+            }
+          />
+          <CameraPanel
+            role="Exit"
+            cameraId={exitCam!}
+            tone="primary"
+            onZoom={() =>
+              setZoom({ role: "Exit", cameraId: exitCam!, tone: "primary" })
+            }
+          />
         </div>
       ) : (
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
@@ -285,6 +390,16 @@ export default function LiveMonitorPage() {
         <CardTitle icon={<ActivityIcon className="h-4 w-4" />}>Recent Activity</CardTitle>
         <ActivityFeed events={activity?.events ?? []} />
       </Card>
+
+      {/* ── Enlarged camera view ── */}
+      {zoom && (
+        <ZoomModal
+          role={zoom.role}
+          cameraId={zoom.cameraId}
+          tone={zoom.tone}
+          onClose={() => setZoom(null)}
+        />
+      )}
     </div>
   );
 }
