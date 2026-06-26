@@ -84,6 +84,8 @@ export default function VisitorProfilePage() {
   const [saving, setSaving] = useState(false);
   const [mergeId, setMergeId] = useState("");
   const [busyMsg, setBusyMsg] = useState<string | null>(null);
+  const [deletingFace, setDeletingFace] = useState<string | null>(null);
+  const [faceMsg, setFaceMsg] = useState<string | null>(null);
 
   if (error) return <ErrorState message="Visitor not found." />;
   if (!visitor) return <Spinner />;
@@ -126,6 +128,30 @@ export default function VisitorProfilePage() {
       router.push(`/visitors/${mergeId.trim()}`);
     } catch (e) {
       setBusyMsg(`Merge failed: ${(e as Error).message}`);
+    }
+  }
+
+  async function deleteFace(faceId: string) {
+    if (!faces || faces.length <= 1) return;
+    if (
+      !confirm(
+        "Remove this face from the recognition gallery?\n\nUse this to delete a wrong-person crop. The visitor's centroid and adaptive thresholds will be recomputed from the remaining faces.",
+      )
+    )
+      return;
+    setDeletingFace(faceId);
+    setFaceMsg(null);
+    try {
+      await api.del(`visitors/${id}/faces/${faceId}`);
+      await Promise.all([
+        mutate(`visitors/${id}/faces`),
+        mutate(`visitors/${id}/gallery-insights`),
+        mutate(`visitors/${id}`),
+      ]);
+    } catch (e) {
+      setFaceMsg(`Could not remove face: ${(e as Error).message}`);
+    } finally {
+      setDeletingFace(null);
     }
   }
 
@@ -295,26 +321,72 @@ export default function VisitorProfilePage() {
       {/* Stored faces (recognition gallery) */}
       {faces && faces.length > 0 && (
         <Card>
-          <CardTitle>Stored Faces ({faces.length})</CardTitle>
+          <CardTitle icon={<UserCog className="h-4 w-4" />}>
+            Stored Faces ({faces.length})
+          </CardTitle>
           <p className="mb-3 text-sm text-text-secondary">
             The face crops behind this person&apos;s recognition embeddings — what the
-            system compares against to recognise them on future visits.
+            system compares against on future visits. Hover a crop and click
+            <Trash2 className="mx-1 inline h-3 w-3 align-[-2px]" />
+            to remove a <span className="font-medium text-text-primary">wrong-person</span>{" "}
+            face; the centroid and thresholds are then rebuilt from the rest.
           </p>
+
+          {/* Contamination hint: a low within-gallery mean similarity means this
+              record likely absorbed a second person. */}
+          {insights?.adaptive_thresholds.expected_match_similarity != null &&
+            insights.adaptive_thresholds.expected_match_similarity < 0.4 && (
+              <div className="mb-3 flex items-start gap-2 rounded-control border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
+                <ShieldX className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>
+                  This gallery looks <strong>contaminated</strong> (low internal
+                  similarity, mean{" "}
+                  {insights.adaptive_thresholds.expected_match_similarity.toFixed(2)}) —
+                  it likely contains more than one person. Remove the faces that
+                  aren&apos;t this visitor to fix ambiguous matches.
+                </span>
+              </div>
+            )}
+
+          {faceMsg && (
+            <p className="mb-3 rounded-control border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
+              {faceMsg}
+            </p>
+          )}
+
           <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
             {faces.map((f) => (
-              <div key={f.id} className="space-y-1">
-                {f.crop_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={imageUrl(f.crop_url)}
-                    alt={f.pose_bin ?? "face"}
-                    className="aspect-square w-full rounded-control border border-card/60 object-cover"
-                  />
-                ) : (
-                  <div className="flex aspect-square w-full items-center justify-center rounded-control border border-card/60 bg-card/40 text-[10px] text-text-muted">
-                    no crop
-                  </div>
-                )}
+              <div key={f.id} className="group/face space-y-1">
+                <div className="relative">
+                  {f.crop_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={imageUrl(f.crop_url)}
+                      alt={f.pose_bin ?? "face"}
+                      className="aspect-square w-full rounded-control border border-card/60 object-cover transition group-hover/face:border-danger/50"
+                    />
+                  ) : (
+                    <div className="flex aspect-square w-full items-center justify-center rounded-control border border-card/60 bg-card/40 text-[10px] text-text-muted">
+                      no crop
+                    </div>
+                  )}
+                  {faces.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => deleteFace(f.id)}
+                      disabled={deletingFace === f.id}
+                      title="Remove this face from the gallery"
+                      aria-label="Remove this face"
+                      className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-danger/90 text-white opacity-0 shadow ring-1 ring-black/30 transition-all hover:bg-danger group-hover/face:opacity-100 focus:opacity-100 disabled:opacity-100"
+                    >
+                      {deletingFace === f.id ? (
+                        <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                      ) : (
+                        <Trash2 className="h-3 w-3" />
+                      )}
+                    </button>
+                  )}
+                </div>
                 <div className="flex items-center justify-between text-[10px] text-text-muted">
                   <span className="truncate">{f.pose_bin ?? "—"}</span>
                   <span>{f.det_score != null ? f.det_score.toFixed(2) : ""}</span>

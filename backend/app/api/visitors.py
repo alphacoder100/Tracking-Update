@@ -262,6 +262,54 @@ async def get_visitor_face_crop(
     return FileResponse(str(path), media_type="image/jpeg")
 
 
+@router.delete("/{visitor_id}/faces/{face_id}")
+async def delete_visitor_face(
+    visitor_id: UUID,
+    face_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _key: str = Security(verify_api_key),
+):
+    """Remove one stored gallery face — e.g. a wrong-person crop that contaminated
+    the gallery and caused ambiguous / false matches. The visitor's centroid and
+    adaptive thresholds are rebuilt from the remaining faces so recognition no
+    longer reflects the deleted face. Refuses to delete the last remaining face
+    (a visitor with no faces can't be recognized — delete the visitor instead)."""
+    from app.models import VisitorFace
+    from app.services import auto_enroller
+
+    visitor = await db.get(Visitor, visitor_id)
+    if visitor is None or not visitor.is_active:
+        raise HTTPException(status_code=404, detail="Visitor not found.")
+
+    face = await db.get(VisitorFace, face_id)
+    if face is None or face.visitor_id != visitor_id:
+        raise HTTPException(status_code=404, detail="Face not found for this visitor.")
+
+    remaining = await db.scalar(
+        select(func.count(VisitorFace.id)).where(VisitorFace.visitor_id == visitor_id)
+    )
+    if (remaining or 0) <= 1:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot remove the visitor's only face. Delete the visitor instead.",
+        )
+
+    await auto_enroller.delete_gallery_face_and_recompute(db, visitor, face)
+    await db.commit()
+
+    gallery_size = await db.scalar(
+        select(func.count(VisitorFace.id)).where(VisitorFace.visitor_id == visitor_id)
+    )
+    logger.info("Removed gallery face %s from visitor %s (%d remaining).",
+                face_id, visitor_id, gallery_size or 0)
+    return {
+        "success": True,
+        "visitor_id": str(visitor_id),
+        "face_id": str(face_id),
+        "remaining_faces": gallery_size or 0,
+    }
+
+
 @router.get("/{visitor_id}/visits", response_model=VisitListResponse)
 async def get_visitor_visits(
     visitor_id: UUID,

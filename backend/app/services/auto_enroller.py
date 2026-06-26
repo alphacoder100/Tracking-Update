@@ -555,6 +555,41 @@ async def update_after_match(
             visitor.thumbnail_path = thumb
 
 
+async def delete_gallery_face_and_recompute(
+    db: AsyncSession, visitor: Visitor, face: VisitorFace
+) -> None:
+    """
+    Operator action: remove ONE wrong / contaminating face from a visitor's
+    gallery, then rebuild their identity signals from the SURVIVING faces so the
+    centroid and per-visitor adaptive thresholds no longer reflect the removed
+    face. Also re-points the avatar at the clearest surviving crop (the removed
+    face may have been the thumbnail).
+
+    This is the manual fix for a gallery that absorbed a second person (low
+    within-gallery similarity → ambiguous / false matches). Mutates `visitor`
+    in place WITHOUT committing — the caller owns the transaction.
+    """
+    await _delete_gallery_face(db, face)
+    # The delete above is auto-flushed before these queries, so both recompute
+    # helpers see only the surviving faces.
+    await recompute_centroid_from_gallery(db, visitor)
+    await recompute_adaptive_thresholds(db, visitor)
+
+    best = (
+        await db.execute(
+            select(VisitorFace)
+            .where(VisitorFace.visitor_id == visitor.id)
+            .order_by(VisitorFace.det_score.desc().nullslast())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if best is not None and best.crop_path and Path(best.crop_path).exists():
+        crop = await asyncio.to_thread(cv2.imread, best.crop_path)
+        thumb = await _save_thumbnail(visitor.id, crop)
+        if thumb:
+            visitor.thumbnail_path = thumb
+
+
 async def clean_visitor_gallery(db: AsyncSession, visitor_id: UUID) -> dict:
     """
     Score every gallery face for clarity (landmark frontality + blur + det_score)
