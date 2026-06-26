@@ -345,12 +345,32 @@ async def recompute_adaptive_thresholds(db: AsyncSession, visitor: Visitor) -> b
     mean = float(sims.mean())
     std = float(sims.std())
     base = settings.RETURNING_FACE_THRESHOLD
-    # 2σ below the mean within-person similarity, clamped so we never exceed the
-    # global returning bar (only ever loosen) and never drop below 0.40.
-    personal_returning = float(np.clip(mean - 2.0 * std, 0.40, base))
 
     visitor.expected_match_similarity = mean
     visitor.match_similarity_std = std
+
+    # Contamination guard: a within-gallery mean in different-person territory
+    # means two identities were merged into this record, NOT one diverse person.
+    # Loosening the threshold here would admit even more cross-person matches (the
+    # runaway that fills a gallery with two faces). Keep the strict global bar and
+    # warn so the record can be split (see scripts/split_contaminated_visitor.py).
+    if mean < settings.GALLERY_CONTAMINATION_MEAN:
+        visitor.personal_returning_threshold = base
+        visitor.personal_new_threshold = settings.NEW_VISITOR_MAX_SIMILARITY
+        logger.warning(
+            "Visitor %s gallery looks contaminated (mean pairwise sim=%.3f < %.3f) "
+            "— keeping strict threshold; consider splitting this record.",
+            visitor.id, mean, settings.GALLERY_CONTAMINATION_MEAN,
+        )
+        return True
+
+    # 2σ below the mean within-person similarity, clamped so we never exceed the
+    # global returning bar (only ever loosen) and never drop into different-person
+    # territory (ADAPTIVE_THRESHOLD_FLOOR — never below it, or loosening for a
+    # diverse visitor would open the gate to strangers).
+    personal_returning = float(
+        np.clip(mean - 2.0 * std, settings.ADAPTIVE_THRESHOLD_FLOOR, base)
+    )
     visitor.personal_returning_threshold = personal_returning
     visitor.personal_new_threshold = min(
         settings.NEW_VISITOR_MAX_SIMILARITY, max(0.0, personal_returning - 0.10)
@@ -381,6 +401,25 @@ async def _is_diverse_embedding(
         if similarity >= diversity_threshold:
             return False
     return True
+
+
+def _coheres_with_centroid(visitor: Visitor, embedding: list) -> bool:
+    """
+    Whether a face is similar enough to the visitor's identity centroid to be
+    LEARNED via a low-confidence path (temporal gate / tracklet attach /
+    cross-camera "learn the hard angle").
+
+    The high-confidence "face" path already cleared the returning threshold
+    against an actual gallery face, so this only gates the speculative adds —
+    the main way a tracking swap (two people who crossed paths) injects a SECOND
+    person into one gallery. A genuine same-person hard angle still sits well
+    above GALLERY_COHESION_MIN against the centroid; a different person does not.
+    """
+    if visitor.face_embedding is None:
+        return True
+    return cosine_similarity(
+        embedding, visitor.face_embedding, assume_normalized=True
+    ) >= settings.GALLERY_COHESION_MIN
 
 
 async def update_after_match(
@@ -414,13 +453,27 @@ async def update_after_match(
     added_to_gallery = False
 
     if match_source == "temporal":
-        if await _is_diverse_embedding(db, visitor.id, face_embedding):
-            await add_face_to_gallery(
-                db, visitor.id, face_embedding, det_score, body_embedding,
-                pose=pose, face_crop=face_crop, camera_id=camera_id,
+        # Low-confidence association: this face did NOT clear the returning
+        # threshold against a real gallery face, so before LEARNING it (gallery +
+        # centroid) require it to still cohere with the visitor centroid. A
+        # tracking swap that pairs two people who crossed paths is the main way a
+        # second identity gets injected here — without this floor the wrong face
+        # would be added and would drag the centroid toward the other person.
+        if _coheres_with_centroid(visitor, face_embedding):
+            if await _is_diverse_embedding(db, visitor.id, face_embedding):
+                await add_face_to_gallery(
+                    db, visitor.id, face_embedding, det_score, body_embedding,
+                    pose=pose, face_crop=face_crop, camera_id=camera_id,
+                )
+                added_to_gallery = True
+            await update_centroid(db, visitor, face_embedding, det_score)
+        else:
+            logger.info(
+                "Visitor %s: skipped learning a temporal/low-confidence face "
+                "(centroid similarity below GALLERY_COHESION_MIN=%.2f) — likely a "
+                "tracking swap, not the same person.",
+                visitor.id, settings.GALLERY_COHESION_MIN,
             )
-            added_to_gallery = True
-        await update_centroid(db, visitor, face_embedding, det_score)
     elif face_similarity >= settings.STRONG_MATCH_THRESHOLD:
         await add_face_to_gallery(
             db, visitor.id, face_embedding, det_score, body_embedding,

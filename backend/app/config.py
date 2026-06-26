@@ -104,6 +104,32 @@ class Settings(BaseSettings):
     # Weighted-moving-average learning rate base for the adaptive centroid.
     CENTROID_ALPHA_BASE: float = 0.15
 
+    # ── Gallery contamination guards ─────────────────────────
+    # These stop one visitor's gallery from silently absorbing a SECOND person
+    # (the runaway that produces a gallery of two different faces).
+    #
+    # Hard floor for the per-visitor adaptive returning threshold. The adaptive
+    # logic only ever LOOSENS the global bar for high-variance visitors; this is
+    # the lowest it may ever drop to. 0.45 keeps it out of different-person
+    # territory (buffalo_l ArcFace: different-person ≈ 0.1-0.3, same ≈ 0.5-0.7) so
+    # loosening for a genuinely diverse visitor can't open the gate to strangers.
+    ADAPTIVE_THRESHOLD_FLOOR: float = 0.45
+    # If a visitor's WITHIN-gallery mean pairwise similarity falls below this, the
+    # gallery is almost certainly contaminated (two identities merged) rather than
+    # one diverse person. Loosening there would admit even MORE cross-person
+    # matches, so instead we keep the strict global threshold and log a warning so
+    # the record can be split. Different-person similarity is ~0.1-0.3, so 0.40 is
+    # comfortably below any plausible single-person gallery mean.
+    GALLERY_CONTAMINATION_MEAN: float = 0.40
+    # Minimum cosine similarity to the visitor's centroid for a face learned via a
+    # LOW-confidence path (temporal gate / tracklet attach / cross-camera "learn
+    # the hard angle") to enter the gallery. The high-confidence "face" path has
+    # already cleared RETURNING_FACE_THRESHOLD against a real gallery face, so this
+    # only gates the speculative adds — the main way a tracking swap injects a
+    # second person. A genuine same-person hard angle still sits ~0.45+ from the
+    # centroid; a different person sits ~0.2-0.35, so 0.40 separates them.
+    GALLERY_COHESION_MIN: float = 0.40
+
     # ── Visit session tracking ───────────────────────────────
     # After this many minutes with no detection, an active visit is closed.
     # The next detection of that visitor starts a NEW visit (and increments
