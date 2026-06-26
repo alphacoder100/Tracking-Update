@@ -12,6 +12,7 @@ from typing import List, Optional
 from uuid import UUID
 
 import numpy as np
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -44,6 +45,7 @@ class ProcessedDetection:
     visit_id: Optional[UUID] = None
     face_confidence: Optional[float] = None
     match_source: str = "none"
+    visitor_name: Optional[str] = None  # set name → shown on the live overlay
 
     @property
     def status(self) -> str:
@@ -63,7 +65,9 @@ class ProcessedDetection:
             return "NEW visitor"
         if self.visitor_id is not None:
             sim = self.face_confidence or 0.0
-            return f"Visitor {str(self.visitor_id)[:8]} ({sim:.2f})"
+            # Prefer a human-set name; fall back to the short id when unnamed.
+            base = self.visitor_name or f"Visitor {str(self.visitor_id)[:8]}"
+            return f"{base} ({sim:.2f})" if sim > 0 else base
         return ""
 
 
@@ -488,6 +492,19 @@ async def process_detections(
             )
         )
         out.append(pd)
+
+    # Attach human-set names so the live overlay shows the name instead of the id.
+    # One batched query per frame for all resolved visitors (skips unnamed ones).
+    named_ids = {pd.visitor_id for pd in out if pd.visitor_id is not None}
+    if named_ids:
+        rows = await db.execute(
+            select(Visitor.id, Visitor.name).where(Visitor.id.in_(named_ids))
+        )
+        name_map = {rid: nm for rid, nm in rows.all() if nm}
+        if name_map:
+            for pd in out:
+                if pd.visitor_id in name_map:
+                    pd.visitor_name = name_map[pd.visitor_id]
 
     await db.commit()
     return out
