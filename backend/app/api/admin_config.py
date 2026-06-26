@@ -103,9 +103,12 @@ class SettingsPatch(BaseModel):
                     f"{key} must be one of {sorted(choices)}; got {self.updates[key]!r}"
                 )
         # Entry and exit cameras must differ when both are provided in the patch.
+        # Compared case-insensitively because camera ids resolve case-insensitively
+        # (CameraManager registry key / gate role matching), so "CAM-01" and
+        # "cam-01" are the same camera and can't be both entry and exit.
         entry = self.updates.get("ENTRY_CAMERA_ID")
         exit_ = self.updates.get("EXIT_CAMERA_ID")
-        if entry and exit_ and str(entry).strip() == str(exit_).strip():
+        if entry and exit_ and str(entry).strip().lower() == str(exit_).strip().lower():
             raise ValueError("ENTRY_CAMERA_ID and EXIT_CAMERA_ID must differ.")
         return self
 

@@ -289,7 +289,13 @@ async def gate_stats(db: AsyncSession, limit: int = 10) -> dict:
     """
     entry = (settings.ENTRY_CAMERA_ID or "").strip()
     exit_ = (settings.EXIT_CAMERA_ID or "").strip()
-    enabled = bool(settings.GATE_COUNTING_ENABLED and entry and exit_ and entry != exit_)
+    # Distinct compared case-insensitively to match GateVisitTracker.is_active()
+    # (camera ids resolve case-insensitively), so this "enabled" flag never
+    # disagrees with whether the tracker is actually counting.
+    enabled = bool(
+        settings.GATE_COUNTING_ENABLED
+        and entry and exit_ and entry.lower() != exit_.lower()
+    )
 
     base = {
         "enabled": enabled,

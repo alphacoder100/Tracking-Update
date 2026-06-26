@@ -83,8 +83,11 @@ class GateVisitTracker:
 
     @staticmethod
     def _roles() -> Tuple[Optional[str], Optional[str]]:
-        entry = (settings.ENTRY_CAMERA_ID or "").strip() or None
-        exit_ = (settings.EXIT_CAMERA_ID or "").strip() or None
+        # Folded to lower-case so the configured roles match a running camera
+        # case-insensitively (mirrors CameraManager's registry key), e.g. the
+        # gate config "CAM-01" matches a camera started as "cam-01".
+        entry = (settings.ENTRY_CAMERA_ID or "").strip().lower() or None
+        exit_ = (settings.EXIT_CAMERA_ID or "").strip().lower() or None
         return entry, exit_
 
     @classmethod
@@ -142,11 +145,12 @@ class GateVisitTracker:
         if visitor_id is None or camera_id is None or not self.is_active():
             return
         entry_id, exit_id = self._roles()
-        if camera_id not in (entry_id, exit_id):
+        cam_key = camera_id.strip().lower()
+        if cam_key not in (entry_id, exit_id):
             return
 
         async with self._lock:
-            if camera_id == entry_id:
+            if cam_key == entry_id:
                 existing = self.open_passes.get(visitor_id)
                 if existing is not None:
                     existing.last_seen_at = timestamp  # still at the entrance

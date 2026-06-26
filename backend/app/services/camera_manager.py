@@ -54,25 +54,37 @@ class CameraManager:
 
     # ── lookup ───────────────────────────────────────────────
 
+    @staticmethod
+    def _key(camera_id: Optional[str]) -> str:
+        """Normalised registry key so lookups are case-insensitive.
+
+        The original-case id is still kept on the CameraService for display;
+        only the dict key is folded, so ``CAM-01`` (the gate config) and
+        ``cam-01`` (a manually-started camera) resolve to the same camera and
+        the Live Monitor no longer shows OFFLINE on a casing mismatch.
+        """
+        return (camera_id or "").strip().lower()
+
     def get(self, camera_id: Optional[str]) -> Optional[CameraService]:
         """Resolve a camera by id, falling back to the default when omitted."""
         if camera_id:
-            return self._cameras.get(camera_id)
-        return self._cameras.get(self.default_id())
+            return self._cameras.get(self._key(camera_id))
+        return self._cameras.get(self._key(self.default_id()))
 
     def get_or_create(self, camera_id: Optional[str]) -> CameraService:
         cid = camera_id or self.default_id()
-        cam = self._cameras.get(cid)
+        key = self._key(cid)
+        cam = self._cameras.get(key)
         if cam is None:
             cam = CameraService(camera_id=cid)
-            self._cameras[cid] = cam
+            self._cameras[key] = cam
         return cam
 
     def default_id(self) -> str:
         """First running camera, else the configured single-camera id."""
-        for cid, cam in self._cameras.items():
+        for cam in self._cameras.values():
             if cam.is_running:
-                return cid
+                return cam.camera_id
         return settings.CAMERA_ID
 
     def any_running(self) -> bool:
@@ -92,13 +104,14 @@ class CameraManager:
     ) -> CameraService:
         """Start (or restart) a single named camera without touching the others."""
         cid = camera_id or settings.CAMERA_ID
+        key = self._key(cid)
         async with self._lock:
-            cam = self._cameras.get(cid)
+            cam = self._cameras.get(key)
             if cam is not None and cam.is_running:
                 raise RuntimeError(f"Camera '{cid}' is already running.")
             if cam is None:
                 cam = CameraService(camera_id=cid)
-                self._cameras[cid] = cam
+                self._cameras[key] = cam
             await cam.start(source=source, camera_id=cid, fps=fps, loop=loop)
             return cam
 
