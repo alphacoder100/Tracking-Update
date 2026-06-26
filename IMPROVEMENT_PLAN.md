@@ -100,7 +100,7 @@ exactly. HNSW is approximate only in *which* rows it returns — addressed by 1.
 confident match: `_is_diverse_embedding` (gallery fetch), `add_face_to_gallery`
 (another gallery fetch), and `recompute_adaptive_thresholds` (a third). On a busy
 stream that is 3+ round-trips per returning visitor per frame.
-- **Action:** fetch the visitor's gallery (`embedding, det_score, pose_bin, body_embedding`)
+- **Action:** fetch the visitor's gallery (`embedding, det_score, pose_bin`)
   **once** per match and pass it down to diversity check + eviction + threshold
   recompute. ~2–3× fewer queries on the hottest write path.
 - **Risk:** low; pure refactor with the same SQL semantics.
@@ -117,11 +117,11 @@ Belt-and-suspenders for 1.1: `ALTER DATABASE ... SET hnsw.ef_search = 100` (or s
 per-role) so any future query path that forgets the `SET LOCAL` still benefits.
 Keep the `SET LOCAL` as the authoritative per-tx value.
 
-### 2.4 Re-rank candidates by a *fused* score, not face-only  *(accuracy)*
-When body embeddings are available and the face is grey-zone, compute a fused
-`w_f * face_sim + w_b * body_sim` for **same-session** candidates before the
+### 2.4 Strengthen face/topology re-ranking for grey-zone cases  *(accuracy)*
+Body Re-ID has been removed from the active architecture. For grey-zone faces,
+prefer face-only evidence with temporal continuity, tracklet stability, pose-bin
 ambiguity gate (not across visits — body is clothing-dependent, already documented).
-This is a more principled version of the current binary body fallback.
+review, or attribute a detection.
 
 ### 2.5 Detector input-size auto-selection  *(speed/accuracy trade)*
 `INSIGHTFACE_DET_SIZE=640` maximises small-face recall but is the slowest setting.
@@ -132,9 +132,9 @@ window, exposed as a runtime setting.
 ### 2.6 Model upgrades (evaluate, don't rush)
 - **AdaFace** in place of ArcFace `buffalo_l` for pose/low-quality robustness
   (directly attacks the profile-vs-frontal similarity drop).
-- **BoT-SORT / StrongSORT** body re-ID for occlusion robustness vs OSNet x0.25.
-  Both are drop-in at the embedding interface; gate behind config and A/B on
-  `detection_events` before switching defaults.
+- Revisit tracker-only models only if face/topology/tracklet evidence is not
+  enough for the deployment. Do not reintroduce body embeddings as a long-term
+  visitor identity signal.
 
 ---
 

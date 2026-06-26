@@ -1,8 +1,8 @@
 """
 Singleton ML model manager.
-Loads YOLOv8n (person detection), InsightFace/ArcFace (512-d face embeddings),
-and OSNet x0.25 (512-d body re-ID) once on startup. Runs on CPU or CUDA GPU;
-the device is chosen at load time and can be switched live via reload().
+Loads YOLOv8n (person detection) and InsightFace/ArcFace (512-d face embeddings)
+once on startup. Runs on CPU or CUDA GPU; the device is chosen at load time and
+can be switched live via reload().
 """
 
 import logging
@@ -168,8 +168,6 @@ class ModelManager:
     def __init__(self):
         self.yolo = None
         self.face_app = None
-        self.body_model_type = "none"  # "osnet" | "none"
-        self.osnet_model = None
         self.device = "cpu"
         self._loaded = False
 
@@ -201,7 +199,6 @@ class ModelManager:
         logger.info("Loading models on device: %s", self.device)
         self._load_yolo(yolo_path)
         self._load_arcface(insightface_name)
-        self._load_body_model()
         self._warmup()
 
         self._loaded = True
@@ -224,8 +221,6 @@ class ModelManager:
         # Drop references so the old (possibly GPU-resident) graphs are freed.
         self.yolo = None
         self.face_app = None
-        self.osnet_model = None
-        self.body_model_type = "none"
         self._loaded = False
         if prev_device == "cuda" and cuda_available():
             try:
@@ -296,53 +291,6 @@ class ModelManager:
         self.face_app.prepare(ctx_id=0 if use_cuda else -1, det_size=(det, det))
         logger.info("InsightFace/ArcFace loaded (%s, det_size=%d).", self.device, det)
 
-    def _load_body_model(self):
-        body_type = settings.BODY_MODEL_TYPE.strip().lower()
-        if body_type != "osnet":
-            logger.info("Body embedding stream disabled (BODY_MODEL_TYPE=%s).", body_type)
-            return
-        try:
-            self._load_osnet()
-        except Exception as exc:
-            self.osnet_model = None
-            logger.warning(
-                "OSNet could not be loaded (%s) — body stream disabled, "
-                "running face-only.",
-                exc,
-            )
-
-    def _load_osnet(self):
-        from pathlib import Path
-        from urllib.request import Request, urlopen
-
-        from app.osnet import osnet_x0_25, load_pretrained_weights
-
-        weights_path = Path(settings.OSNET_WEIGHTS_PATH)
-        if not weights_path.exists():
-            url = settings.OSNET_WEIGHTS_URL
-            if not url:
-                raise FileNotFoundError(
-                    f"OSNet weights not found at {weights_path} and no "
-                    "OSNET_WEIGHTS_URL configured."
-                )
-            logger.info("Downloading OSNet weights from %s ...", url)
-            weights_path.parent.mkdir(parents=True, exist_ok=True)
-            request = Request(url, headers={"User-Agent": "RestaurantTracker/1.0"})
-            with urlopen(request, timeout=60) as response:
-                data = response.read()
-            tmp_path = weights_path.with_suffix(".tmp")
-            tmp_path.write_bytes(data)
-            tmp_path.replace(weights_path)
-            logger.info("OSNet weights saved to %s (%d bytes).", weights_path, len(data))
-
-        model = osnet_x0_25(num_classes=1, loss="softmax")
-        matched = load_pretrained_weights(model, str(weights_path))
-        if matched == 0:
-            raise RuntimeError(f"Checkpoint {weights_path} is incompatible with OSNet x0.25.")
-        self.osnet_model = model.to(self.device).eval()
-        self.body_model_type = "osnet"
-        logger.info("OSNet x0.25 body model loaded (512-d re-ID embeddings, %s).", self.device)
-
     def _warmup(self):
         """Run dummy inference through all models to warm up JIT/graph."""
         logger.info("Warming up models...")
@@ -352,8 +300,6 @@ class ModelManager:
             self.yolo.predict(dummy, verbose=False, conf=0.5, classes=[0], device=self.device)
         if self.face_app:
             self.face_app.get(dummy)
-        if self.osnet_model is not None:
-            self.extract_body_embeddings([dummy[:256, :128]])
 
         logger.info("Warm-up complete.")
 
@@ -475,44 +421,6 @@ class ModelManager:
             })
         return results
 
-    # ImageNet normalization used by torchreid at train and test time.
-    _OSNET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
-    _OSNET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
-
-    def extract_body_embedding(self, person_crop: np.ndarray) -> np.ndarray:
-        return self.extract_body_embeddings([person_crop])[0]
-
-    def extract_body_embeddings(self, person_crops: List[np.ndarray]) -> List[np.ndarray]:
-        """Batched OSNet body-embedding extraction (one forward pass for all crops)."""
-        if not person_crops:
-            return []
-        if self.osnet_model is None:
-            raise RuntimeError("No body embedding model is loaded.")
-
-        batch = np.stack([
-            (
-                cv2.cvtColor(
-                    cv2.resize(crop, (128, 256), interpolation=cv2.INTER_LINEAR),
-                    cv2.COLOR_BGR2RGB,
-                ).astype(np.float32) / 255.0
-                - self._OSNET_MEAN
-            ) / self._OSNET_STD
-            for crop in person_crops
-        ])  # (N, 256, 128, 3)
-        tensor = torch.from_numpy(batch.transpose(0, 3, 1, 2)).to(self.device)
-
-        with torch.no_grad():
-            features = self.osnet_model(tensor)  # (N, 512)
-
-        embeddings = features.cpu().numpy()
-        results: List[np.ndarray] = []
-        for emb in embeddings:
-            norm = np.linalg.norm(emb)
-            if norm > 0:
-                emb = emb / norm
-            results.append(emb)
-        return results
-
     # ── Status ───────────────────────────────────────────────
 
     @property
@@ -520,13 +428,16 @@ class ModelManager:
         return self._loaded
 
     @property
-    def has_body_model(self) -> bool:
-        return self.osnet_model is not None
+    def has_person_model(self) -> bool:
+        return self.yolo is not None
+
+    @property
+    def has_face_model(self) -> bool:
+        return self.face_app is not None
 
     def status(self) -> dict:
         return {
             "yolo_loaded": self.yolo is not None,
             "arcface_loaded": self.face_app is not None,
-            "body_model": self.body_model_type if self.has_body_model else "none",
             "device": self.device,
         }

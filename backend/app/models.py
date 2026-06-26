@@ -35,9 +35,8 @@ class Visitor(Base):
     created_at = Column(DateTime(timezone=True), default=utcnow)
     updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
-    # Centroid embeddings (L2-normalized, adaptively updated on confident matches).
+    # Centroid face embedding (L2-normalized, adaptively updated on confident matches).
     face_embedding = Column(Vector(512), nullable=True)
-    body_embedding = Column(Vector(512), nullable=True)
 
     # Denormalized visit statistics for fast reads.
     visit_count = Column(Integer, nullable=False, default=0)
@@ -88,13 +87,6 @@ class Visitor(Base):
             postgresql_with={"m": 16, "ef_construction": 64},
             postgresql_ops={"face_embedding": "vector_cosine_ops"},
         ),
-        Index(
-            "idx_visitors_body_hnsw",
-            body_embedding,
-            postgresql_using="hnsw",
-            postgresql_with={"m": 16, "ef_construction": 64},
-            postgresql_ops={"body_embedding": "vector_cosine_ops"},
-        ),
         Index("idx_visitors_last_seen", last_seen_at.desc()),
         Index("idx_visitors_visit_count", visit_count.desc()),
     )
@@ -114,7 +106,6 @@ class VisitorFace(Base):
     )
     embedding = Column(Vector(512), nullable=False)
     det_score = Column(Float, nullable=False, default=0.0)
-    body_embedding = Column(Vector(512), nullable=True)
     source_frame_path = Column(Text, nullable=True)
     crop_path = Column(Text, nullable=True)  # tight face crop on disk (for re-scoring)
     clarity_score = Column(Float, nullable=True)  # cached "clearly visible" score, 0–1
@@ -196,7 +187,6 @@ class DetectionEvent(Base):
 
     detected_at = Column(DateTime(timezone=True), nullable=False, default=utcnow)
     face_similarity = Column(Float, nullable=True)
-    body_similarity = Column(Float, nullable=True)
 
     is_new_visitor = Column(Boolean, nullable=False, default=False)
     is_ambiguous = Column(Boolean, nullable=False, default=False)

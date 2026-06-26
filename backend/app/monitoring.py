@@ -63,7 +63,6 @@ def check_models() -> dict:
             "ok": True,
             "yolo_loaded": mgr.has_person_model,
             "face_loaded": mgr.has_face_model,
-            "body_loaded": mgr.has_body_model,
         }
     except Exception as exc:
         return {"ok": False, "error": str(exc)}

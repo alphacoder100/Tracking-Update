@@ -1,7 +1,7 @@
 """
 Computer-vision pipeline.
-Processes a frame through YOLOv8 (persons) → ArcFace (faces) → OSNet (bodies)
-and returns one DetectedPerson per detected face/person.
+Processes a frame through YOLOv8 (persons) and ArcFace (faces), then returns one
+DetectedPerson per detected face/person.
 """
 
 import logging
@@ -104,7 +104,6 @@ class DetectedPerson:
     bbox: dict  # {x1, y1, x2, y2}
     person_confidence: float
     face_embedding: Optional[List[float]] = None
-    body_embedding: Optional[List[float]] = None
     face_bbox: Optional[dict] = None
     face_det_score: Optional[float] = None
     has_face: bool = False
@@ -165,7 +164,6 @@ def refine_small_face(image: np.ndarray, face: dict) -> Optional[dict]:
 
 def process_frame(
     image: np.ndarray,
-    extract_body: bool = True,
     embedding_cache: Optional[FaceEmbeddingCache] = None,
 ) -> List[DetectedPerson]:
     """
@@ -174,9 +172,6 @@ def process_frame(
       2. One full-frame ArcFace pass → all faces (with small-face rescue).
       3. Assign each face to the person box containing it; per-crop fallback for
          persons with no full-frame face.
-      4. One batched OSNet pass → body embeddings (when extract_body and a body
-         model are loaded).
-
     Returns one DetectedPerson per person box (plus any face-only detections
     that fell outside every person box).
     """
@@ -210,7 +205,6 @@ def process_frame(
         )
         return detected_persons
 
-    body_queue: List[tuple] = []  # (DetectedPerson, crop)
     h, w = image.shape[:2]
     used_faces: set = set()
 
@@ -275,9 +269,6 @@ def process_frame(
             else:
                 detected.pose = FacePose(yaw=0.0, pitch=0.0, roll=0.0, bin=PoseBin.UNKNOWN)
 
-        if extract_body and model_mgr.has_body_model:
-            body_queue.append((detected, person_crop))
-
         detected_persons.append(detected)
 
     # Faces that fell outside every person box still count (e.g. seated patrons
@@ -301,15 +292,6 @@ def process_frame(
                 face_landmarks=kps_arr,
             )
         )
-
-    # Single batched body-model pass for all queued person crops.
-    if body_queue:
-        try:
-            embeddings = model_mgr.extract_body_embeddings([c for _, c in body_queue])
-            for (det, _), body_emb in zip(body_queue, embeddings):
-                det.body_embedding = normalize_embedding(body_emb)
-        except Exception as e:
-            logger.error("Failed to extract body embeddings: %s", e)
 
     logger.debug(
         "process_frame timing: yolo=%.3fs arcface=%.3fs (%d person(s), %d face(s)).",

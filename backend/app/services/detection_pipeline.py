@@ -43,7 +43,6 @@ class ProcessedDetection:
     is_ambiguous: bool = False
     visit_id: Optional[UUID] = None
     face_confidence: Optional[float] = None
-    body_confidence: Optional[float] = None
     match_source: str = "none"
 
     @property
@@ -63,7 +62,7 @@ class ProcessedDetection:
         if self.is_new:
             return "NEW visitor"
         if self.visitor_id is not None:
-            sim = self.face_confidence or self.body_confidence or 0.0
+            sim = self.face_confidence or 0.0
             return f"Visitor {str(self.visitor_id)[:8]} ({sim:.2f})"
         return ""
 
@@ -188,7 +187,6 @@ async def process_detections(
     faces = [
         {
             "face_embedding": matchable[i].face_embedding,
-            "body_embedding": matchable[i].body_embedding,
             "det_score": matchable[i].face_det_score or 0.0,
             "pose_bin": matchable[i].pose.bin.value if matchable[i].pose else "unknown",
             "yaw": matchable[i].pose.yaw if matchable[i].pose else None,
@@ -220,7 +218,6 @@ async def process_detections(
         perio_faces = [
             {
                 "face_embedding": periocular_embeddings[i],
-                "body_embedding": matchable[i].body_embedding,
                 "det_score": matchable[i].face_det_score or 0.0,
                 "pose_bin": "unknown",
                 "threshold_offset": threshold_offsets[i],
@@ -240,7 +237,6 @@ async def process_detections(
             bbox=det.face_bbox or det.bbox,
             is_ambiguous=res.is_ambiguous,
             face_confidence=round(res.face_similarity, 4) if res.face_similarity else None,
-            body_confidence=round(res.body_similarity, 4) if res.body_similarity else None,
             match_source=res.match_source,
         )
 
@@ -280,8 +276,7 @@ async def process_detections(
                     db, visitor,
                     face_embedding=det.face_embedding, det_score=det_score,
                     face_similarity=res.face_similarity,
-                    body_embedding=det.body_embedding, face_crop=face_crop,
-                    pose=det.pose, camera_id=camera_id,
+                    face_crop=face_crop, pose=det.pose, camera_id=camera_id,
                 )
             if tracklet is not None:
                 # Record this as the verified pin so later frames can fast-path.
@@ -289,12 +284,6 @@ async def process_detections(
                     tracklet, res.visitor_id,
                     verified_ts=timestamp, verified_embedding=det.face_embedding,
                 )
-
-        elif res.match_source == "body" and res.visitor_id is not None:
-            # Same-session body fallback — attribute only (clothing-dependent).
-            pd.visitor_id = res.visitor_id
-            if tracklet is not None:
-                tracklet_buffer.mark_resolved(tracklet, res.visitor_id)
 
         elif res.is_new or res.match_source == "grey_zone":
             # This tracklet already resolved to a visitor on an earlier frame →
@@ -310,8 +299,8 @@ async def process_detections(
                         db, visitor,
                         face_embedding=det.face_embedding, det_score=det_score,
                         face_similarity=res.face_similarity,
-                        body_embedding=det.body_embedding, face_crop=face_crop,
-                        pose=det.pose, match_source="temporal", camera_id=camera_id,
+                        face_crop=face_crop, pose=det.pose,
+                        match_source="temporal", camera_id=camera_id,
                     )
                 else:
                     tracklet_buffer.clear_visitor(tracklet.visitor_id)
@@ -338,8 +327,8 @@ async def process_detections(
                             db, visitor,
                             face_embedding=det.face_embedding, det_score=det_score,
                             face_similarity=res.face_similarity,
-                            body_embedding=det.body_embedding, face_crop=face_crop,
-                            pose=det.pose, match_source="temporal", camera_id=camera_id,
+                            face_crop=face_crop, pose=det.pose,
+                            match_source="temporal", camera_id=camera_id,
                         )
                     if tracklet is not None:
                         tracklet_buffer.mark_resolved(tracklet, temporal_match)
@@ -364,8 +353,8 @@ async def process_detections(
                             db, visitor,
                             face_embedding=det.face_embedding, det_score=det_score,
                             face_similarity=res.face_similarity,
-                            body_embedding=det.body_embedding, face_crop=face_crop,
-                            pose=det.pose, match_source="temporal", camera_id=camera_id,
+                            face_crop=face_crop, pose=det.pose,
+                            match_source="temporal", camera_id=camera_id,
                         )
                         if tracklet is not None:
                             tracklet_buffer.mark_resolved(tracklet, visitor.id)
@@ -420,7 +409,6 @@ async def process_detections(
                     db,
                     face_embedding=det.face_embedding,
                     det_score=det_score,
-                    body_embedding=det.body_embedding,
                     face_crop=face_crop,
                     pose=det.pose,
                     camera_id=camera_id,
@@ -491,7 +479,6 @@ async def process_detections(
                 visit_id=visit_id,
                 detected_at=timestamp,
                 face_similarity=res.face_similarity or None,
-                body_similarity=res.body_similarity or None,
                 is_new_visitor=pd.is_new,
                 is_ambiguous=False,
                 match_source=res.match_source,

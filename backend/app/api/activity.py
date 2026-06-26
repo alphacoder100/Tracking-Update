@@ -76,7 +76,6 @@ async def list_activity(
                 ),
                 visit_id=ev.visit_id,
                 face_similarity=ev.face_similarity,
-                body_similarity=ev.body_similarity,
                 is_new_visitor=ev.is_new_visitor,
                 is_ambiguous=ev.is_ambiguous,
                 match_source=ev.match_source,

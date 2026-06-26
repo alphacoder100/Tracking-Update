@@ -64,7 +64,6 @@ def _add_gallery_face(
     visitor_id: UUID,
     embedding: list,
     det_score: float,
-    body_embedding: Optional[list],
     pose: Optional[FacePose],
     face_crop: Optional[np.ndarray],
     camera_id: Optional[str] = None,
@@ -75,7 +74,6 @@ def _add_gallery_face(
         visitor_id=visitor_id,
         embedding=embedding,
         det_score=det_score,
-        body_embedding=body_embedding,
         pose_bin=pose.bin.value if pose else "unknown",
         yaw=pose.yaw if pose else None,
         pitch=pose.pitch if pose else None,
@@ -97,11 +95,19 @@ async def _delete_gallery_face(db: AsyncSession, face: VisitorFace) -> None:
     await db.delete(face)
 
 
+async def _load_gallery_faces(db: AsyncSession, visitor_id: UUID) -> list[VisitorFace]:
+    """Fetch a visitor gallery once so hot-path helpers can share it."""
+    return (
+        await db.execute(
+            select(VisitorFace).where(VisitorFace.visitor_id == visitor_id)
+        )
+    ).scalars().all()
+
+
 async def register_new_visitor(
     db: AsyncSession,
     face_embedding: list,
     det_score: float,
-    body_embedding: Optional[list] = None,
     face_crop: Optional[np.ndarray] = None,
     pose: Optional[FacePose] = None,
     camera_id: Optional[str] = None,
@@ -110,7 +116,6 @@ async def register_new_visitor(
     visitor = Visitor(
         id=uuid4(),
         face_embedding=face_embedding,
-        body_embedding=body_embedding,
         visit_count=0,
         best_face_det_score=det_score,
         total_faces_recorded=1,
@@ -121,8 +126,8 @@ async def register_new_visitor(
     await db.flush()  # assign PK / make it queryable in this tx
 
     _add_gallery_face(
-        db, visitor.id, face_embedding, det_score, body_embedding, pose,
-        face_crop, camera_id=camera_id,
+        db, visitor.id, face_embedding, det_score, pose, face_crop,
+        camera_id=camera_id,
     )
 
     thumb = _save_thumbnail(visitor.id, face_crop)
@@ -146,10 +151,10 @@ async def add_face_to_gallery(
     visitor_id: UUID,
     embedding: list,
     det_score: float,
-    body_embedding: Optional[list] = None,
     pose: Optional[FacePose] = None,
     face_crop: Optional[np.ndarray] = None,
     camera_id: Optional[str] = None,
+    existing_faces: Optional[list[VisitorFace]] = None,
 ) -> None:
     """
     Insert a face using pose-aware eviction policy.
@@ -160,11 +165,7 @@ async def add_face_to_gallery(
     max_per_bin = settings.MAX_FACES_PER_POSE_BIN
     min_per_bin = settings.MIN_FACES_PER_POSE_BIN
 
-    rows = (
-        await db.execute(
-            select(VisitorFace).where(VisitorFace.visitor_id == visitor_id)
-        )
-    ).scalars().all()
+    rows = existing_faces if existing_faces is not None else await _load_gallery_faces(db, visitor_id)
 
     total = len(rows)
 
@@ -186,10 +187,12 @@ async def add_face_to_gallery(
             return
 
     def _add():
-        _add_gallery_face(
-            db, visitor_id, embedding, det_score, body_embedding, pose,
-            face_crop, camera_id=camera_id,
+        face = _add_gallery_face(
+            db, visitor_id, embedding, det_score, pose, face_crop,
+            camera_id=camera_id,
         )
+        if existing_faces is not None:
+            existing_faces.append(face)
 
     if total < settings.MAX_FACES_PER_VISITOR:
         # Gallery has room — add if this bin isn't over its cap
@@ -203,6 +206,8 @@ async def add_face_to_gallery(
         worst = _find_eviction_candidate(rows, bin_counts, bin_name)
         if worst is not None and det_score > worst.det_score * 0.9:
             await _delete_gallery_face(db, worst)
+            if existing_faces is not None and worst in existing_faces:
+                existing_faces.remove(worst)
             _add()
     else:
         # Bin already has enough faces — only replace worst-quality in same bin
@@ -212,6 +217,8 @@ async def add_face_to_gallery(
         )
         if worst_in_bin is not None and det_score > (worst_in_bin.det_score or 0.0):
             await _delete_gallery_face(db, worst_in_bin)
+            if existing_faces is not None and worst_in_bin in existing_faces:
+                existing_faces.remove(worst_in_bin)
             _add()
 
 
@@ -276,24 +283,20 @@ async def recompute_centroid_from_gallery(db: AsyncSession, visitor: Visitor) ->
         select(
             VisitorFace.embedding,
             VisitorFace.det_score,
-            VisitorFace.body_embedding,
         ).where(VisitorFace.visitor_id == visitor.id)
     )
 
     face_vecs: list[np.ndarray] = []
     weights: list[float] = []
-    body_vecs: list[np.ndarray] = []
     best_det = 0.0
 
-    for emb, det_score, body_emb in rows.all():
+    for emb, det_score in rows.all():
         if emb is None:
             continue
         face_vecs.append(np.asarray(emb, dtype=np.float32))
         # Weight by quality, with a floor so every gallery face still counts.
         weights.append(max(float(det_score or 0.0), 0.05))
         best_det = max(best_det, float(det_score or 0.0))
-        if body_emb is not None:
-            body_vecs.append(np.asarray(body_emb, dtype=np.float32))
 
     if not face_vecs:
         return False
@@ -306,11 +309,6 @@ async def recompute_centroid_from_gallery(db: AsyncSession, visitor: Visitor) ->
         visitor.best_face_det_score = max(
             float(visitor.best_face_det_score or 0.0), best_det
         )
-    if body_vecs:
-        visitor.body_embedding = normalize_embedding(
-            np.mean(np.stack(body_vecs), axis=0)
-        )
-
     logger.info(
         "Recomputed centroid for visitor %s from %d gallery face(s).",
         visitor.id, len(face_vecs),
@@ -318,7 +316,11 @@ async def recompute_centroid_from_gallery(db: AsyncSession, visitor: Visitor) ->
     return True
 
 
-async def recompute_adaptive_thresholds(db: AsyncSession, visitor: Visitor) -> bool:
+async def recompute_adaptive_thresholds(
+    db: AsyncSession,
+    visitor: Visitor,
+    existing_faces: Optional[list[VisitorFace]] = None,
+) -> bool:
     """
     Recompute a visitor's personal thresholds from the within-gallery pairwise
     similarity distribution. A visitor whose faces are mutually consistent
@@ -331,10 +333,13 @@ async def recompute_adaptive_thresholds(db: AsyncSession, visitor: Visitor) -> b
     if not settings.ADAPTIVE_VISITOR_THRESHOLDS:
         return False
 
-    rows = await db.execute(
-        select(VisitorFace.embedding).where(VisitorFace.visitor_id == visitor.id)
-    )
-    gallery = [e for e in rows.scalars().all() if e is not None]
+    if existing_faces is None:
+        rows = await db.execute(
+            select(VisitorFace.embedding).where(VisitorFace.visitor_id == visitor.id)
+        )
+        gallery = [e for e in rows.scalars().all() if e is not None]
+    else:
+        gallery = [f.embedding for f in existing_faces if f.embedding is not None]
     if len(gallery) < 3:
         return False
 
@@ -383,16 +388,20 @@ async def _is_diverse_embedding(
     visitor_id: UUID,
     new_embedding: list,
     diversity_threshold: float = 0.85,
+    existing_faces: Optional[list[VisitorFace]] = None,
 ) -> bool:
     """
     Check if the new embedding is sufficiently different from existing gallery faces.
     Returns True if the embedding should be added (no near-duplicate in gallery).
     Threshold 0.85 means > 85% similar is considered a near-duplicate.
     """
-    rows = await db.execute(
-        select(VisitorFace.embedding).where(VisitorFace.visitor_id == visitor_id)
-    )
-    gallery = rows.scalars().all()
+    if existing_faces is None:
+        rows = await db.execute(
+            select(VisitorFace.embedding).where(VisitorFace.visitor_id == visitor_id)
+        )
+        gallery = rows.scalars().all()
+    else:
+        gallery = [f.embedding for f in existing_faces if f.embedding is not None]
     if not gallery:
         return True
 
@@ -428,7 +437,6 @@ async def update_after_match(
     face_embedding: list,
     det_score: float,
     face_similarity: float,
-    body_embedding: Optional[list] = None,
     face_crop: Optional[np.ndarray] = None,
     pose: Optional[FacePose] = None,
     match_source: str = "face",
@@ -451,6 +459,13 @@ async def update_after_match(
         return
 
     added_to_gallery = False
+    gallery_faces: Optional[list[VisitorFace]] = None
+
+    async def gallery() -> list[VisitorFace]:
+        nonlocal gallery_faces
+        if gallery_faces is None:
+            gallery_faces = await _load_gallery_faces(db, visitor.id)
+        return gallery_faces
 
     if match_source == "temporal":
         # Low-confidence association: this face did NOT clear the returning
@@ -460,10 +475,14 @@ async def update_after_match(
         # second identity gets injected here — without this floor the wrong face
         # would be added and would drag the centroid toward the other person.
         if _coheres_with_centroid(visitor, face_embedding):
-            if await _is_diverse_embedding(db, visitor.id, face_embedding):
+            faces = await gallery()
+            if await _is_diverse_embedding(
+                db, visitor.id, face_embedding, existing_faces=faces
+            ):
                 await add_face_to_gallery(
-                    db, visitor.id, face_embedding, det_score, body_embedding,
-                    pose=pose, face_crop=face_crop, camera_id=camera_id,
+                    db, visitor.id, face_embedding, det_score, pose=pose,
+                    face_crop=face_crop, camera_id=camera_id,
+                    existing_faces=faces,
                 )
                 added_to_gallery = True
             await update_centroid(db, visitor, face_embedding, det_score)
@@ -475,17 +494,23 @@ async def update_after_match(
                 visitor.id, settings.GALLERY_COHESION_MIN,
             )
     elif face_similarity >= settings.STRONG_MATCH_THRESHOLD:
+        faces = await gallery()
         await add_face_to_gallery(
-            db, visitor.id, face_embedding, det_score, body_embedding,
-            pose=pose, face_crop=face_crop, camera_id=camera_id,
+            db, visitor.id, face_embedding, det_score, pose=pose,
+            face_crop=face_crop, camera_id=camera_id,
+            existing_faces=faces,
         )
         await update_centroid(db, visitor, face_embedding, det_score)
         added_to_gallery = True
     elif face_similarity >= settings.RETURNING_FACE_THRESHOLD:
-        if await _is_diverse_embedding(db, visitor.id, face_embedding):
+        faces = await gallery()
+        if await _is_diverse_embedding(
+            db, visitor.id, face_embedding, existing_faces=faces
+        ):
             await add_face_to_gallery(
-                db, visitor.id, face_embedding, det_score, body_embedding,
-                pose=pose, face_crop=face_crop, camera_id=camera_id,
+                db, visitor.id, face_embedding, det_score, pose=pose,
+                face_crop=face_crop, camera_id=camera_id,
+                existing_faces=faces,
             )
             added_to_gallery = True
         # Medium-confidence matches now also nudge the centroid — a visitor who
@@ -496,7 +521,7 @@ async def update_after_match(
     if added_to_gallery:
         visitor.total_faces_recorded = (visitor.total_faces_recorded or 0) + 1
         # Gallery changed → refresh the per-visitor adaptive thresholds.
-        await recompute_adaptive_thresholds(db, visitor)
+        await recompute_adaptive_thresholds(db, visitor, existing_faces=gallery_faces)
 
     if det_score > (visitor.best_face_det_score or 0.0):
         visitor.best_face_det_score = det_score

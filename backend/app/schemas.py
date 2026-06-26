@@ -38,8 +38,7 @@ class DetectionItem(BaseModel):
     is_ambiguous: bool = False
     visit_id: Optional[UUID] = None
     face_confidence: Optional[float] = None
-    body_confidence: Optional[float] = None
-    match_source: str = "none"  # "face" | "body" | "new" | "none"
+    match_source: str = "none"  # "face" | "new" | "none"
     bbox: Optional[BoundingBox] = None
 
 
@@ -192,7 +191,6 @@ class ActivityEvent(BaseModel):
     thumbnail_url: Optional[str] = None
     visit_id: Optional[UUID] = None
     face_similarity: Optional[float] = None
-    body_similarity: Optional[float] = None
     is_new_visitor: bool = False
     is_ambiguous: bool = False
     match_source: Optional[str] = None
@@ -214,8 +212,6 @@ class SettingsResponse(BaseModel):
     reject_similarity: float
     ambiguity_margin: float
     strong_match_threshold: float
-    allow_body_fallback: bool
-    returning_body_threshold: float
     # Gallery
     max_faces_per_visitor: int
     face_quality_cutoff: float
@@ -240,7 +236,6 @@ class HealthResponse(BaseModel):
     models_loaded: bool
     yolo_loaded: bool
     arcface_loaded: bool
-    body_model: str
     camera_running: bool
     visitors_count: int
     total_visits: int

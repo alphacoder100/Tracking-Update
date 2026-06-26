@@ -24,6 +24,7 @@ from app.config import settings
 from app.cv_pipeline import process_frame
 from app.database import AsyncSessionLocal
 from app.ml_models import FaceEmbeddingCache
+from app.monitoring import record_frame_latency
 from app.services.detection_pipeline import process_detections
 from app.utils import (
     cap_frame_long_side,
@@ -314,9 +315,12 @@ class CameraService:
                 self._draw_roi_overlay(out)
                 self._last_annotated = out
 
+                encode_start = perf_counter()
                 jpeg = await asyncio.to_thread(
                     encode_jpeg, out, settings.LIVE_FEED_JPEG_QUALITY
                 )
+                encode_secs = perf_counter() - encode_start
+                logger.debug("Display encode timing: jpeg=%.3fs.", encode_secs)
                 async with self._display_cond:
                     self._last_jpeg = jpeg
                     self._display_id = last_seen_id
@@ -330,9 +334,9 @@ class CameraService:
     async def _inference_worker(self, worker_id: int) -> None:
         """Pull the newest frame and run the CV pipeline off the event loop.
 
-        When an ROI is set, inference runs on the ROI crop only — so YOLO,
-        ArcFace and OSNet never compute (and nothing ever registers) for anyone
-        outside the zone. Boxes are offset back to full-frame coordinates.
+        When an ROI is set, inference runs on the ROI crop only, so YOLO and
+        ArcFace never compute (and nothing ever registers) for anyone outside
+        the zone. Boxes are offset back to full-frame coordinates.
         """
         embedding_cache = FaceEmbeddingCache()
         try:
@@ -355,10 +359,11 @@ class CameraService:
                     self._last_sig = sig
 
                 try:
+                    infer_start = perf_counter()
                     detections = await run_inference(
-                        process_frame, infer_frame,
-                        settings.ALLOW_BODY_FALLBACK, embedding_cache
+                        process_frame, infer_frame, embedding_cache
                     )
+                    infer_secs = perf_counter() - infer_start
                 except Exception as exc:
                     self.last_error = str(exc)
                     logger.exception("Inference failed (worker %d): %s", worker_id, exc)
@@ -368,7 +373,7 @@ class CameraService:
                     self._offset_detections(detections, ox, oy)
 
                 if self._results is not None:
-                    await self._results.put((fid, frame, detections))
+                    await self._results.put((fid, frame, detections, infer_secs))
         except asyncio.CancelledError:
             raise
 
@@ -412,7 +417,7 @@ class CameraService:
         try:
             while self.is_running:
                 try:
-                    fid, frame, detections = await asyncio.wait_for(
+                    fid, frame, detections, infer_secs = await asyncio.wait_for(
                         self._results.get(), timeout=1.0
                     )
                 except asyncio.TimeoutError:
@@ -430,6 +435,7 @@ class CameraService:
                 self.stats["persons_detected"] += len(detections)
 
                 processed = []
+                post_start = perf_counter()
                 if detections:
                     now = datetime.now(timezone.utc)
                     async with AsyncSessionLocal() as db:
@@ -448,6 +454,12 @@ class CameraService:
                             self.stats["new_visitors"] += 1
                         elif pd.visitor_id is not None:
                             self.stats["returning_visitors"] += 1
+                post_secs = perf_counter() - post_start
+                record_frame_latency(infer_secs + post_secs)
+                logger.debug(
+                    "Frame timing: camera=%s inference=%.3fs post_db=%.3fs detections=%d.",
+                    self.camera_id, infer_secs, post_secs, len(detections),
+                )
 
                 # Publish overlays; the display loop draws them on the live frame.
                 self._last_annotations = [
@@ -554,10 +566,11 @@ class CameraService:
                     prev_sig = sig
 
                 try:
+                    infer_start = perf_counter()
                     detections = await run_inference(
-                        process_frame, frame,
-                        settings.ALLOW_BODY_FALLBACK, embedding_cache
+                        process_frame, frame, embedding_cache
                     )
+                    infer_secs = perf_counter() - infer_start
                 except Exception as exc:
                     self.last_error = str(exc)
                     logger.exception("Inference failed: %s", exc)
@@ -571,6 +584,7 @@ class CameraService:
                 self.stats["persons_detected"] += len(detections)
 
                 processed = []
+                post_start = perf_counter()
                 if detections:
                     now = datetime.now(timezone.utc)
                     async with AsyncSessionLocal() as db:
@@ -589,6 +603,12 @@ class CameraService:
                             self.stats["new_visitors"] += 1
                         elif pd.visitor_id is not None:
                             self.stats["returning_visitors"] += 1
+                post_secs = perf_counter() - post_start
+                record_frame_latency(infer_secs + post_secs)
+                logger.debug(
+                    "Frame timing: camera=%s inference=%.3fs post_db=%.3fs detections=%d.",
+                    self.camera_id, infer_secs, post_secs, len(detections),
+                )
 
                 annotations = [
                     {"bbox": pd.bbox, "label": pd.label, "status": pd.status}

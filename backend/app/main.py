@@ -299,7 +299,6 @@ async def health_check(db: AsyncSession = Depends(get_db)):
         models_loaded=model_mgr.is_loaded,
         yolo_loaded=status["yolo_loaded"],
         arcface_loaded=status["arcface_loaded"],
-        body_model=status["body_model"],
         camera_running=CameraManager.get_instance().any_running(),
         visitors_count=visitors_count,
         total_visits=total_visits,

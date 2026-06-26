@@ -1,8 +1,8 @@
 # Restaurant Visitor Tracker
 
 Auto-registering visitor detection, recognition, and analytics. Built on
-FastAPI, PostgreSQL + pgvector, and CPU-based face/body recognition models
-(YOLOv8n, ArcFace, OSNet).
+FastAPI, PostgreSQL + pgvector, and CPU-based person/face recognition models
+(YOLOv8n, ArcFace).
 
 A webcam (or uploaded image/video) is processed at ~1 FPS: every person is
 detected, first-time visitors are auto-registered, returning visitors are
@@ -25,8 +25,8 @@ for the analytics API.
 |   |-- app/database.py            Async SQLAlchemy connection
 |   |-- app/models.py              visitors / visitor_faces / visits / detection_events
 |   |-- app/schemas.py             API request/response schemas
-|   |-- app/ml_models.py           YOLOv8n + ArcFace + OSNet (CPU singleton)
-|   |-- app/cv_pipeline.py         Per-frame detection (YOLO -> ArcFace -> OSNet)
+|   |-- app/ml_models.py           YOLOv8n + ArcFace (CPU/GPU singleton)
+|   |-- app/cv_pipeline.py         Per-frame detection (YOLO -> ArcFace)
 |   |-- app/utils.py               Media / frame / dedup / annotation helpers
 |   |-- app/services/
 |   |   |-- identity_resolver.py   NEW vs RETURNING decision (HNSW + ambiguity gate)
@@ -57,8 +57,8 @@ docker compose up --build -d
 docker compose logs -f backend
 ```
 
-First start downloads Python deps + model weights (YOLO, ArcFace buffalo_l,
-OSNet) — this takes several minutes. When ready:
+First start downloads Python deps + model weights (YOLO, ArcFace buffalo_l) —
+this can take several minutes. When ready:
 
 - API docs: http://localhost:3001/docs
 - Health:   http://localhost:3001/api/health

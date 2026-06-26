@@ -41,7 +41,7 @@ export function ActivityFeed({
   return (
     <ul className="divide-y divide-card/40">
       {events.map((ev) => {
-        const sim = ev.face_similarity ?? ev.body_similarity;
+        const sim = ev.face_similarity;
         const name = ev.visitor_name || (ev.visitor_id ? `Visitor ${shortId(ev.visitor_id)}` : "Unknown");
         const inner = (
           <div className="flex items-center gap-3 py-2.5">

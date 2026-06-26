@@ -47,7 +47,6 @@ const GROUPS: { title: string; keys: string[] }[] = [
   {
     title: "Detection & Quality",
     keys: [
-      "FACE_CONF_SKIP_BODY",
       "MIN_FACE_DET_SCORE",
       "FACE_QUALITY_CUTOFF",
       "YOLO_PERSON_CONFIDENCE",

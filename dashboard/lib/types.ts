@@ -124,7 +124,6 @@ export interface ActivityEvent {
   thumbnail_url: string | null;
   visit_id: string | null;
   face_similarity: number | null;
-  body_similarity: number | null;
   is_new_visitor: boolean;
   is_ambiguous: boolean;
   match_source: string | null;
@@ -142,8 +141,6 @@ export interface SettingsResponse {
   reject_similarity: number;
   ambiguity_margin: number;
   strong_match_threshold: number;
-  allow_body_fallback: boolean;
-  returning_body_threshold: number;
   max_faces_per_visitor: number;
   face_quality_cutoff: number;
   visit_cooldown_minutes: number;
@@ -161,7 +158,6 @@ export interface HealthResponse {
   models_loaded: boolean;
   yolo_loaded: boolean;
   arcface_loaded: boolean;
-  body_model: string;
   camera_running: boolean;
   visitors_count: number;
   total_visits: number;
@@ -173,7 +169,6 @@ export interface DetectionItem {
   is_ambiguous: boolean;
   visit_id: string | null;
   face_confidence: number | null;
-  body_confidence: number | null;
   match_source: string;
   bbox: BoundingBox | null;
 }

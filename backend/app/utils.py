@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 VIDEO_SUFFIXES = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v"}
 
 # ── Inference concurrency gate ───────────────────────────────
-# Each heavy inference call (YOLO/ArcFace/OSNet) uses every CPU core, so letting
+# Each heavy inference call (YOLO/ArcFace) uses every CPU core, so letting
 # several run concurrently from the threadpool makes them all slower. This
 # semaphore serializes (or bounds) inference across all requests/tasks.
 _inference_semaphore: Optional[asyncio.Semaphore] = None

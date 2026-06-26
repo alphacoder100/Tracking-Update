@@ -77,16 +77,6 @@ class Settings(BaseSettings):
     # confident same-person match) so a bulk sweep never fuses two people.
     AUTO_MERGE_MIN_SIMILARITY: float = 0.65
 
-    # ── Body (OSNet) re-ID fallback ──────────────────────────
-    # OSNet body embeddings are CLOTHING/APPEARANCE dependent: they only
-    # discriminate "same person, same outfit, minutes apart", NOT the same
-    # regular customer on a different day. Body matching is therefore a
-    # short-term, same-session re-acquisition signal only and is OFF by default
-    # as a cross-detection identity signal. Enable only if you understand it
-    # will NOT recognise returning visitors across visits.
-    ALLOW_BODY_FALLBACK: bool = False
-    RETURNING_BODY_THRESHOLD: float = 0.55
-
     # ── Gallery management ───────────────────────────────────
     # Keep the top-N highest-quality face embeddings per visitor (multi-pose
     # gallery). More poses = better recall over time at a bounded table size.
@@ -217,14 +207,6 @@ class Settings(BaseSettings):
     # faces; 480/320 are faster for close-up footage.
     INSIGHTFACE_DET_SIZE: int = 640
 
-    # Body re-ID model: "osnet" (OSNet x0.25, 512-d, fast) or "none".
-    BODY_MODEL_TYPE: str = "osnet"
-    OSNET_WEIGHTS_PATH: str = "models/osnet_x0_25_msmt17.pth"
-    OSNET_WEIGHTS_URL: str = (
-        "https://huggingface.co/kaiyangzhou/osnet/resolve/main/"
-        "osnet_x0_25_msmt17_combineall_256x128_amsgrad_ep150_stp60_"
-        "lr0.0015_b64_fb10_softmax_labelsmooth_flip_jitter.pth"
-    )
 
     # ── Face embedding cache (dHash) ─────────────────────────
     # The per-stream ArcFace embedding cache is bounded with LRU eviction so a
@@ -251,7 +233,7 @@ class Settings(BaseSettings):
     PIPELINE_PARALLEL: bool = True
     # Number of concurrent inference workers. 1 is safe and already keeps the GPU
     # busy back-to-back. >1 overlaps CPU preprocessing with GPU compute for more
-    # throughput, BUT the shared YOLO/InsightFace/OSNet objects are not
+    # throughput, BUT the shared YOLO/InsightFace objects are not
     # guaranteed thread-safe — only raise this once each worker has its own model
     # instances. Also raise INFERENCE_MAX_CONCURRENCY to match.
     INFERENCE_WORKERS: int = 1
@@ -324,7 +306,6 @@ class Settings(BaseSettings):
     SEATED_COOLDOWN_MINUTES: int = 45
 
     # ── Cascade (skip body when face is strong) ──────────────
-    FACE_CONF_SKIP_BODY: float = 0.60
 
     # ── Multi-angle identity (Phase 3) ───────────────────────
     # Rank gallery candidates by continuous head-pose angular distance (yaw)

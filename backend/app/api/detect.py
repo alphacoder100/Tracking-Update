@@ -58,7 +58,7 @@ async def detect(
         if dedup.is_duplicate(frame):
             continue
 
-        detections = await run_inference(process_frame, frame, settings.ALLOW_BODY_FALLBACK)
+        detections = await run_inference(process_frame, frame)
         frames_processed += 1
         if not detections:
             continue
@@ -74,7 +74,6 @@ async def detect(
             is_ambiguous=pd.is_ambiguous,
             visit_id=pd.visit_id,
             face_confidence=pd.face_confidence,
-            body_confidence=pd.body_confidence,
             match_source=pd.match_source,
             bbox=pd.bbox,
         )

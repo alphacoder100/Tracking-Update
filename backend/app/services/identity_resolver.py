@@ -16,8 +16,6 @@ Strategy:
          → optional body fallback, else HELD ("grey_zone") per GREY_ZONE_POLICY —
            NOT registered as a new visitor (that fragments one person at a new
            angle into many records).
-  3. Body fallback is OFF by default and same-session only — OSNet embeddings are
-     clothing dependent and must NOT be used to recognise visitors across visits.
 """
 
 import logging
@@ -39,8 +37,7 @@ class ResolutionResult:
     is_new: bool = False
     is_ambiguous: bool = False
     face_similarity: float = 0.0
-    body_similarity: float = 0.0
-    match_source: str = "none"  # "face" | "body" | "new" | "grey_zone" | "none"
+    match_source: str = "none"  # "face" | "new" | "grey_zone" | "none"
     # Best-scoring gallery visitor for this face, even when we DIDN'T match them
     # (i.e. a new/grey-zone decision). Lets the review queue show "similar to whom".
     top_match_id: Optional[UUID] = None
@@ -177,21 +174,6 @@ async def _search_faces_batch(
     return grouped, threshold_map
 
 
-async def _search_body(embedding: List[float], db: AsyncSession) -> Optional[Tuple[UUID, float]]:
-    """Closest visitor by body centroid (used only when body fallback is enabled)."""
-    query = text(r"""
-        SELECT id, 1 - (body_embedding <=> :emb\:\:vector) AS similarity
-        FROM visitors
-        WHERE body_embedding IS NOT NULL AND is_active = TRUE
-        ORDER BY body_embedding <=> :emb\:\:vector
-        LIMIT 1
-    """)
-    row = (await db.execute(query, {"emb": str(embedding)})).first()
-    if row is None:
-        return None
-    return row.id, float(row.similarity)
-
-
 def _best_per_visitor(
     matches: List[Tuple[UUID, float]]
 ) -> List[Tuple[UUID, float]]:
@@ -269,8 +251,8 @@ async def resolve_batch(
     """
     Resolve a list of detected faces in one DB round-trip.
 
-    faces: [{"face_embedding": [...], "body_embedding": [...] | None,
-             "det_score": float, "pose_bin": str | None, "yaw": float | None}].
+    faces: [{"face_embedding": [...], "det_score": float,
+             "pose_bin": str | None, "yaw": float | None}].
     Returns one ResolutionResult per input face, in order.
     """
     if not faces:
@@ -290,22 +272,6 @@ async def resolve_batch(
             threshold_offset=face.get("threshold_offset", 0.0),
             threshold_map=threshold_map,
         )
-
-        # Grey-zone body fallback (same-session re-acquisition only, opt-in).
-        if (
-            res.match_source == "grey_zone"
-            and settings.ALLOW_BODY_FALLBACK
-            and face.get("body_embedding")
-        ):
-            body = await _search_body(face["body_embedding"], db)
-            if body is not None and body[1] >= settings.RETURNING_BODY_THRESHOLD:
-                res = ResolutionResult(
-                    visitor_id=body[0],
-                    face_similarity=res.face_similarity,
-                    body_similarity=body[1],
-                    match_source="body",
-                    top_match_id=res.top_match_id,
-                )
 
         # Remaining grey-zone faces are HELD by default (match_source stays
         # "grey_zone" → detection_pipeline records an audit event and does not
