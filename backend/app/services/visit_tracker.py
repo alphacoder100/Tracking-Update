@@ -88,6 +88,8 @@ class VisitTracker:
                     camera_id=v.camera_id,
                 )
         logger.info("Recovered %d active visit(s) from DB.", len(self.active_visits))
+        # Heal any pre-existing duplicate open visits (e.g. left by an old merge).
+        await self.reconcile_open_visits(db)
 
     def _effective_cooldown(self, visit: "ActiveVisit") -> timedelta:
         """Return the cooldown for this visit (seated = longer)."""
@@ -195,6 +197,70 @@ class VisitTracker:
                 camera_id=camera_id,
             )
             return visit.id, True
+
+    async def reconcile_open_visits(
+        self, db: AsyncSession, commit: bool = True
+    ) -> int:
+        """Guarantee at most ONE open visit per visitor.
+
+        Two open (`left_at IS NULL`) visits for the same visitor are always
+        erroneous. They appear when a MERGE re-points an open visit onto a target
+        that already has one, or when a duplicate survives a restart (recover_active
+        keys by visitor_id, so extras orphan and cleanup_stale — which only walks
+        in-memory state — never closes them). For each affected visitor we keep the
+        EARLIEST-started open visit (the real ongoing session), adopt it into the
+        tracker so it is extended/closed normally, and close the rest. Returns the
+        number of duplicate visits closed. Pass commit=False to fold into the
+        caller's transaction (e.g. inside a merge)."""
+        rows = (
+            await db.execute(
+                select(Visit)
+                .where(Visit.left_at.is_(None))
+                .order_by(Visit.visitor_id, Visit.entered_at.asc())
+            )
+        ).scalars().all()
+
+        by_visitor: Dict[UUID, list] = {}
+        for v in rows:
+            by_visitor.setdefault(v.visitor_id, []).append(v)
+
+        closed = 0
+        async with self._lock:
+            for visitor_id, visits in by_visitor.items():
+                if len(visits) <= 1:
+                    continue
+                keeper = visits[0]  # earliest entered_at
+                # Point the tracker at the keeper so detections extend IT.
+                self.active_visits[visitor_id] = ActiveVisit(
+                    visit_id=keeper.id,
+                    visitor_id=visitor_id,
+                    started_at=keeper.entered_at,
+                    last_detected_at=keeper.updated_at or keeper.entered_at,
+                    detection_count=keeper.detection_count or 0,
+                    best_confidence=keeper.best_face_confidence or 0.0,
+                    sum_confidence=(keeper.avg_face_confidence or 0.0)
+                    * (keeper.detection_count or 0),
+                    camera_id=keeper.camera_id,
+                )
+                for v in visits[1:]:
+                    left_at = v.updated_at or v.entered_at
+                    duration = max(
+                        0, int((left_at - v.entered_at).total_seconds() // 60)
+                    )
+                    await db.execute(
+                        update(Visit)
+                        .where(Visit.id == v.id)
+                        .values(left_at=left_at, duration_minutes=duration)
+                    )
+                    closed += 1
+
+        if closed:
+            if commit:
+                await db.commit()
+            logger.info(
+                "Reconciled visits: closed %d duplicate open visit(s).", closed
+            )
+        return closed
 
     async def cleanup_stale(self, db: AsyncSession, now: Optional[datetime] = None) -> int:
         """Close visits idle past the cooldown or open past the max duration."""

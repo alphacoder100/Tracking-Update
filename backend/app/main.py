@@ -68,6 +68,9 @@ async def _stale_visit_loop():
         await asyncio.sleep(settings.STALE_CHECK_INTERVAL_SECONDS)
         try:
             async with AsyncSessionLocal() as db:
+                # Collapse any duplicate open visits per visitor (e.g. left by a
+                # merge) before the idle/max-duration close pass.
+                await tracker.reconcile_open_visits(db)
                 await tracker.cleanup_stale(db)
                 await gate_tracker.cleanup_stale(db)
         except Exception as exc:

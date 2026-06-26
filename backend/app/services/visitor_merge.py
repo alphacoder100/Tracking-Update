@@ -120,6 +120,15 @@ async def merge_visitors(
         (target.total_faces_recorded or 0) + (source.total_faces_recorded or 0)
     )
 
+    # Re-pointing can leave the target with TWO open visits (its own + the
+    # source's). Collapse to a single open session so the profile never shows two
+    # simultaneous "Active" visits. Folds into this transaction (commit=False).
+    try:
+        await VisitTracker.get_instance().reconcile_open_visits(db, commit=False)
+    except Exception as exc:
+        logger.warning("Open-visit reconcile after merge %s→%s failed (%s).",
+                       source_id, target_id, exc)
+
     # Pooled gallery may exceed the cap — trim before recomputing the centroid.
     try:
         trimmed = await _trim_gallery(db, target_id)
