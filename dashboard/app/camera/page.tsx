@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import { Play, RefreshCcw, Square, Video } from "lucide-react";
 
@@ -182,60 +182,105 @@ export default function CameraPage() {
     }
   }
 
-  // Redraw canvas when ROI state changes
-  useEffect(() => {
+  // Paint the overlay: the saved zone (solid blue) and the pending one being
+  // drawn (dashed amber). The pending box stays on screen after the mouse is
+  // released — until you Save or Clear — so you can actually see what you picked.
+  const drawOverlay = useCallback(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    const img = imgRef.current;
+    if (!canvas || !img) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!img.naturalWidth) return; // snapshot not loaded yet
+    const { offsetX, offsetY, scale } = getImgRect(img);
 
-    // Draw saved ROI (solid blue)
-    if (savedRoi && imgRef.current) {
-      const { offsetX, offsetY, scale } = getImgRect(imgRef.current);
-      const x1 = offsetX + savedRoi.x1 * scale;
-      const y1 = offsetY + savedRoi.y1 * scale;
-      const x2 = offsetX + savedRoi.x2 * scale;
-      const y2 = offsetY + savedRoi.y2 * scale;
-      ctx.strokeStyle = "rgb(59, 130, 246)";
-      ctx.lineWidth = 2;
-      ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
-      ctx.fillStyle = "rgba(59, 130, 246, 0.05)";
-      ctx.fillRect(x1, y1, x2 - x1, y2 - y1);
-    }
+    const drawBox = (
+      r: RegionOfInterest,
+      stroke: string,
+      fill: string,
+      dashed: boolean,
+      label: string,
+    ) => {
+      const x = offsetX + Math.min(r.x1, r.x2) * scale;
+      const y = offsetY + Math.min(r.y1, r.y2) * scale;
+      const w = Math.abs(r.x2 - r.x1) * scale;
+      const h = Math.abs(r.y2 - r.y1) * scale;
 
-    // Draw in-progress ROI (dashed orange)
-    if (roi && drawing && imgRef.current) {
-      const { offsetX, offsetY, scale } = getImgRect(imgRef.current);
-      const x1 = offsetX + roi.x1 * scale;
-      const y1 = offsetY + roi.y1 * scale;
-      const x2 = offsetX + roi.x2 * scale;
-      const y2 = offsetY + roi.y2 * scale;
-      ctx.strokeStyle = "rgb(255, 140, 0)";
+      // Dim everything OUTSIDE the zone so the selection reads at a glance.
+      ctx.save();
+      ctx.fillStyle = "rgba(0, 0, 0, 0.45)";
+      ctx.beginPath();
+      ctx.rect(0, 0, canvas.width, canvas.height);
+      ctx.rect(x, y, w, h);
+      ctx.fill("evenodd");
+      ctx.restore();
+
+      ctx.fillStyle = fill;
+      ctx.fillRect(x, y, w, h);
       ctx.lineWidth = 2;
-      ctx.setLineDash([5, 5]);
-      ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+      ctx.strokeStyle = stroke;
+      ctx.setLineDash(dashed ? [6, 4] : []);
+      ctx.strokeRect(x, y, w, h);
       ctx.setLineDash([]);
-    }
-  }, [roi, savedRoi, drawing]);
 
-  // Sync canvas size with image
+      // Corner handles.
+      ctx.fillStyle = stroke;
+      for (const [hx, hy] of [
+        [x, y],
+        [x + w, y],
+        [x, y + h],
+        [x + w, y + h],
+      ] as const) {
+        ctx.fillRect(hx - 3, hy - 3, 6, 6);
+      }
+
+      // Label chip above the box (or just inside if there's no room above).
+      if (label) {
+        ctx.font = "600 12px ui-sans-serif, system-ui, sans-serif";
+        const padX = 6;
+        const tw = ctx.measureText(label).width;
+        const ly = y > 20 ? y - 18 : y + 2;
+        ctx.fillStyle = stroke;
+        ctx.fillRect(x, ly, tw + padX * 2, 16);
+        ctx.fillStyle = "#fff";
+        ctx.fillText(label, x + padX, ly + 12);
+      }
+    };
+
+    // Show the pending selection if one is being/has been drawn; otherwise the
+    // saved zone. (When drawing a replacement, the pending box takes over.)
+    if (roi) {
+      const w = Math.abs(roi.x2 - roi.x1);
+      const h = Math.abs(roi.y2 - roi.y1);
+      drawBox(roi, "rgb(245, 158, 11)", "rgba(245, 158, 11, 0.12)", true, `New zone · ${w}×${h}`);
+    } else if (savedRoi) {
+      drawBox(savedRoi, "rgb(59, 130, 246)", "rgba(59, 130, 246, 0.12)", false, "Detection zone");
+    }
+  }, [roi, savedRoi]);
+
+  // Keep the canvas buffer matched to the rendered image, then repaint. Runs on
+  // image (re)load, snapshot refresh, window resize, and any overlay change.
   useEffect(() => {
     const img = imgRef.current;
     const canvas = canvasRef.current;
     if (!img || !canvas) return;
 
-    const onLoad = () => {
+    const sync = () => {
       canvas.width = img.clientWidth;
       canvas.height = img.clientHeight;
+      drawOverlay();
     };
 
-    img.addEventListener("load", onLoad);
-    onLoad();
-    return () => img.removeEventListener("load", onLoad);
-  }, [snapTick]);
+    img.addEventListener("load", sync);
+    window.addEventListener("resize", sync);
+    sync();
+    return () => {
+      img.removeEventListener("load", sync);
+      window.removeEventListener("resize", sync);
+    };
+  }, [snapTick, status?.is_running, drawOverlay]);
 
   const running = !!status?.is_running;
 
@@ -351,9 +396,18 @@ export default function CameraPage() {
           </div>
         )}
 
+        {running && (
+          <p className="mb-2 text-xs text-text-muted">
+            Drag a rectangle on the snapshot to draw a detection zone — only
+            people inside it are tracked. The box stays highlighted until you
+            <span className="text-text-secondary"> Save</span> or
+            <span className="text-text-secondary"> Discard</span> it.
+          </p>
+        )}
+
         <div className="overflow-hidden rounded-card border border-card/60 bg-black">
           {running ? (
-            <div className="relative inline-block w-full">
+            <div className="relative inline-block w-full select-none">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 ref={imgRef}
@@ -361,6 +415,7 @@ export default function CameraPage() {
                   selectedCam ? `&camera_id=${encodeURIComponent(selectedCam)}` : ""
                 }`}
                 alt="Latest camera snapshot"
+                draggable={false}
                 className="mx-auto max-h-[480px] object-contain w-full"
               />
               <canvas
@@ -378,13 +433,25 @@ export default function CameraPage() {
             </p>
           )}
         </div>
-        <div className="mt-4 flex gap-2">
+        <div className="mt-4 flex flex-wrap items-center gap-2">
           <Button variant="success" onClick={saveRoi} disabled={!roi}>
             Save Detection Zone
           </Button>
-          <Button variant="danger" onClick={clearRoi} disabled={!savedRoi}>
+          {roi && (
+            <Button variant="ghost" onClick={() => setRoi(null)}>
+              Discard
+            </Button>
+          )}
+          <Button variant="danger" onClick={clearRoi} disabled={!savedRoi || !!roi}>
             Clear Zone
           </Button>
+          <span className="ml-auto text-xs text-text-muted">
+            {roi
+              ? `Unsaved zone · ${Math.abs(roi.x2 - roi.x1)}×${Math.abs(roi.y2 - roi.y1)} px`
+              : savedRoi
+                ? "Saved zone active"
+                : "No zone — tracking the full frame"}
+          </span>
         </div>
       </Card>
 
