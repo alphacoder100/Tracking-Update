@@ -54,6 +54,52 @@ function Metric({
   );
 }
 
+/** Compact metric used under each camera feed. */
+function MiniMetric({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="rounded-control bg-white/[0.02] px-2.5 py-1.5 text-center ring-1 ring-inset ring-white/[0.04]">
+      <p className="tnum text-base font-semibold text-text-primary">{value}</p>
+      <p className="text-[10px] uppercase tracking-wide text-text-muted">{label}</p>
+    </div>
+  );
+}
+
+/** One labelled camera feed (Entry / Exit) with its own live status + per-camera
+ *  counters, so a two-camera gate can be monitored side by side. */
+function CameraPanel({
+  role,
+  cameraId,
+  tone,
+}: {
+  role: string;
+  cameraId: string;
+  tone: "success" | "primary";
+}) {
+  const [st, setSt] = useState<CameraStatus | null>(null);
+  const running = !!st?.is_running;
+  return (
+    <Card padding="sm" className="space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Badge tone={running ? tone : "neutral"} dot>
+            {role}
+          </Badge>
+          <span className="font-mono text-xs text-text-muted">{cameraId}</span>
+        </div>
+        <span className="text-xs text-text-muted">
+          {running ? `${st?.fps ?? "—"} fps` : "offline"}
+        </span>
+      </div>
+      <DetectionFeed cameraId={cameraId} onStatus={setSt} />
+      <div className="grid grid-cols-3 gap-2">
+        <MiniMetric label="Persons" value={st?.persons_detected ?? 0} />
+        <MiniMetric label="New" value={st?.new_visitors ?? 0} />
+        <MiniMetric label="Returning" value={st?.returning_visitors ?? 0} />
+      </div>
+    </Card>
+  );
+}
+
 export default function LiveMonitorPage() {
   const [cam, setCam] = useState<CameraStatus | null>(null);
 
@@ -70,6 +116,12 @@ export default function LiveMonitorPage() {
   const running = !!cam?.is_running;
   const isVideo = cam?.source_kind === "video";
 
+  // Show the entrance and exit feeds side by side whenever both are configured
+  // (ENTRY_CAMERA_ID / EXIT_CAMERA_ID), so a gate can be monitored at a glance.
+  const entryCam = gate?.entry_camera_id || null;
+  const exitCam = gate?.exit_camera_id || null;
+  const dualCam = !!(entryCam && exitCam && entryCam !== exitCam);
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -78,9 +130,15 @@ export default function LiveMonitorPage() {
         subtitle="Live feed with on-frame recognition labels."
         icon={<Radio className="h-5 w-5" />}
         action={
-          <Badge tone={running ? "success" : "neutral"} dot>
-            {running ? (isVideo ? "Streaming" : "Live") : "Offline"}
-          </Badge>
+          dualCam ? (
+            <Badge tone="primary" dot>
+              Entry + Exit
+            </Badge>
+          ) : (
+            <Badge tone={running ? "success" : "neutral"} dot>
+              {running ? (isVideo ? "Streaming" : "Live") : "Offline"}
+            </Badge>
+          )
         }
       />
 
@@ -140,7 +198,13 @@ export default function LiveMonitorPage() {
         </div>
       )}
 
-      {/* ── Hero: live feed + live-session telemetry ── */}
+      {/* ── Hero: dual entry/exit feeds, or single feed + telemetry ── */}
+      {dualCam ? (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <CameraPanel role="Entry" cameraId={entryCam!} tone="success" />
+          <CameraPanel role="Exit" cameraId={exitCam!} tone="primary" />
+        </div>
+      ) : (
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <div className="xl:col-span-2">
           <DetectionFeed onStatus={setCam} />
@@ -206,6 +270,7 @@ export default function LiveMonitorPage() {
           )}
         </Card>
       </div>
+      )}
 
       {/* ── Gate activity table (when enabled) ── */}
       {gate?.enabled && (

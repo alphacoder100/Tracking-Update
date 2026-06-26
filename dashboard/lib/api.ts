@@ -12,13 +12,38 @@ export class ApiError extends Error {
   }
 }
 
+/** Turn a FastAPI error body into a readable string. 422 responses put a list
+ *  of {loc, msg, type} objects under `detail`, which would otherwise render as
+ *  "[object Object]". */
+function extractDetail(body: unknown, fallback: string): string {
+  if (!body || typeof body !== "object") return fallback;
+  const d = (body as { detail?: unknown; error?: unknown }).detail ??
+    (body as { error?: unknown }).error;
+  if (!d) return fallback;
+  if (typeof d === "string") return d;
+  if (Array.isArray(d)) {
+    const parts = d.map((e) => {
+      if (e && typeof e === "object") {
+        const err = e as { msg?: string; loc?: unknown[] };
+        const where = Array.isArray(err.loc) ? err.loc.slice(1).join(".") : "";
+        return where ? `${where}: ${err.msg ?? ""}`.trim() : err.msg ?? JSON.stringify(e);
+      }
+      return String(e);
+    });
+    return parts.filter(Boolean).join("; ") || fallback;
+  }
+  if (typeof d === "object") {
+    return (d as { msg?: string }).msg || JSON.stringify(d);
+  }
+  return String(d);
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${PROXY}/${path}`, { ...init, cache: "no-store" });
   if (!res.ok) {
     let detail = res.statusText;
     try {
-      const body = await res.json();
-      detail = body.detail || body.error || detail;
+      detail = extractDetail(await res.json(), res.statusText);
     } catch {
       /* ignore */
     }

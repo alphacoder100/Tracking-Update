@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import useSWR, { useSWRConfig } from "swr";
-import { ArrowLeft, GitMerge, Save, ShieldCheck, ShieldX, Trash2, UserCog } from "lucide-react";
+import { ArrowLeft, Copy, GitMerge, Save, ShieldCheck, ShieldX, Trash2, UserCog } from "lucide-react";
 
 import { api, fetcher, imageUrl } from "@/lib/api";
 import type { VisitorDetail, VisitListResponse, VisitorFaceItem } from "@/lib/types";
@@ -120,14 +120,37 @@ export default function VisitorProfilePage() {
   }
 
   async function merge() {
-    if (!mergeId.trim()) return;
-    if (!confirm(`Merge this visitor INTO ${mergeId}? This cannot be undone.`)) return;
+    const target = mergeId.trim();
+    if (!target) return;
+    const UUID_RE =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!UUID_RE.test(target)) {
+      setBusyMsg(
+        "Enter the target's full 36-character ID, not the short 8-character one. Open the visitor you want to keep and use “Copy full ID”.",
+      );
+      return;
+    }
+    if (target === id) {
+      setBusyMsg("Can't merge a visitor into itself — enter a different target ID.");
+      return;
+    }
+    if (!confirm(`Merge THIS visitor into ${target.slice(0, 8)}…? This visitor will be removed. This cannot be undone.`))
+      return;
     setBusyMsg("Merging…");
     try {
-      await api.post(`admin/visitors/${id}/merge`, { target_visitor_id: mergeId.trim() });
-      router.push(`/visitors/${mergeId.trim()}`);
+      await api.post(`admin/visitors/${id}/merge`, { target_visitor_id: target });
+      router.push(`/visitors/${target}`);
     } catch (e) {
       setBusyMsg(`Merge failed: ${(e as Error).message}`);
+    }
+  }
+
+  async function copyId() {
+    try {
+      await navigator.clipboard.writeText(visitor!.id);
+      setBusyMsg("Full ID copied to clipboard.");
+    } catch {
+      setBusyMsg(visitor!.id); // clipboard blocked — show it so it can be copied manually
     }
   }
 
@@ -451,16 +474,26 @@ export default function VisitorProfilePage() {
 
       {/* Danger zone */}
       <Card>
-        <CardTitle>Admin</CardTitle>
+        <CardTitle icon={<UserCog className="h-4 w-4" />}>Admin</CardTitle>
+
+        {/* This visitor's full ID — paste it into the OTHER record's merge box. */}
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-control bg-white/[0.02] px-3 py-2 ring-1 ring-inset ring-white/[0.04]">
+          <span className="text-xs text-text-muted">This visitor&apos;s ID</span>
+          <code className="select-all font-mono text-xs text-text-secondary">{visitor.id}</code>
+          <Button variant="ghost" size="sm" onClick={copyId} className="ml-auto">
+            <Copy className="h-3.5 w-3.5" /> Copy full ID
+          </Button>
+        </div>
+
         <div className="flex flex-wrap items-end gap-3">
           <div className="flex items-end gap-2">
             <label className="flex flex-col gap-1 text-xs text-text-secondary">
-              Merge into visitor ID
+              Merge THIS visitor into (keep target&apos;s full ID)
               <input
                 value={mergeId}
                 onChange={(e) => setMergeId(e.target.value)}
-                placeholder="target uuid"
-                className="w-72 rounded-control border border-card/60 bg-bg px-3 py-2 text-sm outline-none focus:border-primary"
+                placeholder="paste full 36-char UUID of the visitor to keep"
+                className="w-96 max-w-full rounded-control border border-card/60 bg-bg px-3 py-2 font-mono text-sm outline-none focus:border-primary"
               />
             </label>
             <Button variant="ghost" onClick={merge}>
@@ -471,7 +504,12 @@ export default function VisitorProfilePage() {
             <Trash2 className="h-4 w-4" /> Delete
           </Button>
         </div>
-        {busyMsg && <p className="mt-2 text-sm text-text-secondary">{busyMsg}</p>}
+        <p className="mt-2 text-xs text-text-muted">
+          Merging removes <strong>this</strong> visitor and folds its visits &amp; faces
+          into the target. Open the visitor you want to keep, click “Copy full ID”, then
+          paste it here.
+        </p>
+        {busyMsg && <p className="mt-2 break-all text-sm text-text-secondary">{busyMsg}</p>}
       </Card>
     </div>
   );
