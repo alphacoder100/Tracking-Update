@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import useSWR from "swr";
-import { Play, RefreshCcw, Square } from "lucide-react";
+import useSWR, { useSWRConfig } from "swr";
+import { Play, RefreshCcw, Square, Video } from "lucide-react";
 
 import { api, fetcher, imageUrl } from "@/lib/api";
 import type {
@@ -16,10 +16,23 @@ import { CameraTopologyManager } from "@/components/camera-topology";
 import { uptime } from "@/lib/format";
 
 export default function CameraPage() {
-  const { data: status, error, mutate } = useSWR<CameraStatus>("camera/status", fetcher, {
-    refreshInterval: 3000,
+  const { mutate: globalMutate } = useSWRConfig();
+
+  // Which camera the snapshot / status / detection-zone controls act on. Each
+  // camera (e.g. an entry and an exit) keeps its OWN zone server-side, so the
+  // selector lets you draw a separate region for each.
+  const [selectedCam, setSelectedCam] = useState<string | null>(null);
+  const camQS = selectedCam ? `?camera_id=${encodeURIComponent(selectedCam)}` : "";
+
+  const { data: cameras } = useSWR<CameraStatus[]>("camera/cameras", fetcher, {
+    refreshInterval: 5000,
   });
-  const { data: roiData } = useSWR<RoiResponse>("camera/roi", fetcher);
+  const { data: status, error, mutate } = useSWR<CameraStatus>(
+    `camera/status${camQS}`,
+    fetcher,
+    { refreshInterval: 3000 },
+  );
+  const { data: roiData } = useSWR<RoiResponse>(`camera/roi${camQS}`, fetcher);
   // All-time registered visitor count (active, non-staff); limit=1 → just the total.
   const { data: visitorList } = useSWR<VisitorListResponse>(
     "visitors?limit=1",
@@ -42,23 +55,36 @@ export default function CameraPage() {
   const imgRef = useRef<HTMLImageElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Load existing ROI on mount
+  // Default the selector to the first running camera (else the first known one).
   useEffect(() => {
-    if (roiData?.roi) {
-      setSavedRoi(roiData.roi);
-    }
+    if (selectedCam || !cameras || cameras.length === 0) return;
+    const pick = cameras.find((c) => c.is_running) ?? cameras[0];
+    if (pick?.camera_id) setSelectedCam(pick.camera_id);
+  }, [cameras, selectedCam]);
+
+  // Switching cameras: drop the previous camera's zone immediately so it never
+  // bleeds onto another feed; the per-camera ROI fetch repopulates it below.
+  useEffect(() => {
+    setRoi(null);
+    setSavedRoi(null);
+  }, [selectedCam]);
+
+  // Load the selected camera's saved ROI (or clear it when that camera has none).
+  useEffect(() => {
+    if (roiData) setSavedRoi(roiData.roi ?? null);
   }, [roiData]);
 
   async function start() {
     setBusy(true);
     setMsg(null);
     try {
-      await api.post("camera/start", {
+      const res = await api.post<{ camera_id?: string }>("camera/start", {
         source,
         camera_id: cameraId || undefined,
         fps: parseFloat(fps),
       });
-      await mutate();
+      if (res?.camera_id) setSelectedCam(res.camera_id);
+      await Promise.all([mutate(), globalMutate("camera/cameras")]);
     } catch (e) {
       setMsg((e as Error).message);
     } finally {
@@ -70,8 +96,8 @@ export default function CameraPage() {
     setBusy(true);
     setMsg(null);
     try {
-      await api.post("camera/stop");
-      await mutate();
+      await api.post(`camera/stop${camQS}`);
+      await Promise.all([mutate(), globalMutate("camera/cameras")]);
     } catch (e) {
       setMsg((e as Error).message);
     } finally {
@@ -138,7 +164,7 @@ export default function CameraPage() {
   async function saveRoi() {
     if (!roi) return;
     try {
-      await api.post("camera/roi", { roi });
+      await api.post(`camera/roi${camQS}`, { roi });
       setSavedRoi(roi);
       setRoi(null);
     } catch (e) {
@@ -148,7 +174,7 @@ export default function CameraPage() {
 
   async function clearRoi() {
     try {
-      await api.post("camera/roi", { roi: null });
+      await api.post(`camera/roi${camQS}`, { roi: null });
       setSavedRoi(null);
       setRoi(null);
     } catch (e) {
@@ -294,13 +320,46 @@ export default function CameraPage() {
             <RefreshCcw className="h-4 w-4" /> Refresh
           </Button>
         </div>
+
+        {/* Per-camera selector — each camera keeps its own detection zone. */}
+        {cameras && cameras.length > 0 && (
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <span className="text-xs text-text-muted">Detection zone for</span>
+            {cameras.map((c) => {
+              const active = c.camera_id === selectedCam;
+              return (
+                <button
+                  key={c.camera_id ?? "default"}
+                  type="button"
+                  onClick={() => setSelectedCam(c.camera_id ?? null)}
+                  className={`inline-flex items-center gap-1.5 rounded-pill px-3 py-1 text-xs font-medium ring-1 ring-inset transition ${
+                    active
+                      ? "bg-gradient-primary-soft text-text-primary ring-primary/30"
+                      : "bg-white/5 text-text-secondary ring-white/10 hover:text-text-primary"
+                  }`}
+                >
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full ${
+                      c.is_running ? "bg-success" : "bg-text-muted"
+                    }`}
+                  />
+                  <Video className="h-3 w-3" />
+                  {c.camera_id ?? "default"}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         <div className="overflow-hidden rounded-card border border-card/60 bg-black">
           {running ? (
             <div className="relative inline-block w-full">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 ref={imgRef}
-                src={`${imageUrl("camera/snapshot")}?t=${snapTick}`}
+                src={`${imageUrl("camera/snapshot")}?t=${snapTick}${
+                  selectedCam ? `&camera_id=${encodeURIComponent(selectedCam)}` : ""
+                }`}
                 alt="Latest camera snapshot"
                 className="mx-auto max-h-[480px] object-contain w-full"
               />
