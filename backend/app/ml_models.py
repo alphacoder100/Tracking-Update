@@ -196,6 +196,22 @@ class ModelManager:
             # which would hide the GPU from torch and onnxruntime even now. Clear it
             # before loading any model so the CUDA providers actually bind to the GPU.
             _ensure_gpu_visible()
+            # Re-verify the GPU is actually usable *now*. PyTorch can report
+            # is_available()=True yet device_count()=0 (e.g. CPU-only build, a
+            # driver/runtime mismatch, or a CUDA context broken by a prior CPU run).
+            # The import-time snapshot can't catch this, so a live check is required
+            # to avoid handing Ultralytics a non-existent device=0.
+            try:
+                usable = torch.cuda.is_available() and torch.cuda.device_count() > 0
+            except Exception:
+                usable = False
+            if not usable:
+                logger.warning(
+                    "CUDA requested but torch.cuda.device_count()=%d — "
+                    "falling back to CPU.",
+                    torch.cuda.device_count(),
+                )
+                self.device = "cpu"
         logger.info("Loading models on device: %s", self.device)
         self._load_yolo(yolo_path)
         self._load_arcface(insightface_name)
