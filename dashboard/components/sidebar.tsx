@@ -6,6 +6,7 @@ import useSWR from "swr";
 import {
   Activity,
   BarChart3,
+  BrainCircuit,
   Camera,
   ChevronLeft,
   ChevronRight,
@@ -28,6 +29,7 @@ const NAV = [
   { href: "/studio", label: "Video Studio", icon: Clapperboard },
   { href: "/visitors", label: "Visitors", icon: Users },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
+  { href: "/ai", label: "AI Diagnostics", icon: BrainCircuit },
   { href: "/activity", label: "Activity", icon: Activity },
   { href: "/review", label: "Review Queue", icon: ClipboardCheck, badgeKey: "review" },
   { href: "/multicam", label: "Multicam", icon: LayoutGrid },

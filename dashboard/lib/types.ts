@@ -212,6 +212,21 @@ export interface DetectionQuality {
   total_detections: number;
 }
 
+// Decision-pipeline health (from GET /api/analytics/pipeline-quality). Drives
+// the AI Diagnostics page — how detections were resolved and how many were held.
+export interface PipelineQuality {
+  total_detections: number;
+  by_source: Record<string, number>;
+  grey_zone: number;
+  grey_zone_rate: number;
+  ambiguous: number;
+  ambiguous_rate: number;
+  temporal_recoveries: number;
+  cross_camera_recoveries: number;
+  tracklet_recoveries: number;
+  new_registrations: number;
+}
+
 // Entry→exit gate counting (from GET /api/analytics/gate).
 export interface GatePass {
   id: string;
