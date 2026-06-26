@@ -139,7 +139,7 @@ export function Sidebar() {
                   : "gap-3 px-3 py-2"
               } ${
                 active
-                  ? "bg-white/5 font-medium text-text-primary"
+                  ? "bg-gradient-primary-soft font-medium text-text-primary ring-1 ring-inset ring-primary/20"
                   : "text-text-secondary hover:bg-white/5 hover:text-text-primary"
               }`}
             >
@@ -193,19 +193,30 @@ export function Sidebar() {
           <Dot ok={health?.database === "connected"} />
         </div>
       ) : (
-        <div className="space-y-2 border-t border-white/5 px-5 py-4 text-xs text-text-secondary">
-          <p className="font-semibold uppercase tracking-wide text-text-muted">System Status</p>
-          <div className="flex items-center gap-2">
-            <Dot ok={!!health?.camera_running} />
-            Camera: {health?.camera_running ? "Running" : "Stopped"}
-          </div>
-          <div className="flex items-center gap-2">
-            <Dot ok={!!health?.models_loaded} />
-            Models: {health?.models_loaded ? "Loaded" : "Loading"}
-          </div>
-          <div className="flex items-center gap-2">
-            <Dot ok={health?.database === "connected"} />
-            DB: {health?.database ?? "—"}
+        <div className="p-3">
+          <div className="glass-strong space-y-2.5 rounded-card px-4 py-3.5 text-xs text-text-secondary">
+            <p className="eyebrow">System Status</p>
+            <div className="flex items-center gap-2">
+              <Dot ok={!!health?.camera_running} />
+              <span className="text-text-muted">Camera</span>
+              <span className="ml-auto font-medium text-text-secondary">
+                {health?.camera_running ? "Running" : "Stopped"}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Dot ok={!!health?.models_loaded} />
+              <span className="text-text-muted">Models</span>
+              <span className="ml-auto font-medium text-text-secondary">
+                {health?.models_loaded ? "Loaded" : "Loading"}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Dot ok={health?.database === "connected"} />
+              <span className="text-text-muted">Database</span>
+              <span className="ml-auto font-medium text-text-secondary">
+                {health?.database ?? "—"}
+              </span>
+            </div>
           </div>
         </div>
       )}

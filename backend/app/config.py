@@ -278,6 +278,14 @@ class Settings(BaseSettings):
     # and document your consent/notice posture before deploying.
     VISITOR_RETENTION_DAYS: int = 0
     RETENTION_PURGE_INTERVAL_HOURS: int = 24
+    # Purge detection_events (the per-detection audit trail) older than this many
+    # days. This table grows ~1 row/detection/camera and is the fastest-growing
+    # table in the system; left unbounded it bloats local disk and slows analytics.
+    # 0 disables (keep forever). Independent of VISITOR_RETENTION_DAYS.
+    DETECTION_EVENT_RETENTION_DAYS: int = 0
+    # Rows deleted per batch in the purge loops (keeps each DELETE short so it
+    # never holds a long lock on the local database).
+    RETENTION_PURGE_BATCH_SIZE: int = 5_000
 
     # ── Analytics ────────────────────────────────────────────
     ANALYTICS_DEFAULT_DAYS: int = 30

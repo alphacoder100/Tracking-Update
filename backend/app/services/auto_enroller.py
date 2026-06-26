@@ -8,6 +8,7 @@ Auto-enroller + gallery manager.
     underrepresented bins can evict overrepresented ones.
 """
 
+import asyncio
 import logging
 from pathlib import Path
 from typing import Optional
@@ -27,10 +28,8 @@ from app.cv_pipeline import PoseBin, FacePose
 logger = logging.getLogger(__name__)
 
 
-def _save_thumbnail(visitor_id: UUID, face_crop: Optional[np.ndarray]) -> Optional[str]:
-    """Save a face crop as the visitor thumbnail. Returns the path or None."""
-    if face_crop is None or face_crop.size == 0:
-        return None
+def _write_thumbnail_sync(visitor_id: UUID, face_crop: np.ndarray) -> Optional[str]:
+    """Blocking thumbnail write (mkdir + JPEG encode). Run via a worker thread."""
     out_dir = Path(settings.VISITOR_PHOTO_DIR) / str(visitor_id)
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / "thumbnail.jpg"
@@ -42,12 +41,23 @@ def _save_thumbnail(visitor_id: UUID, face_crop: Optional[np.ndarray]) -> Option
     return str(path)
 
 
-def _save_face_crop(
-    visitor_id: UUID, face_id: UUID, face_crop: Optional[np.ndarray]
+async def _save_thumbnail(
+    visitor_id: UUID, face_crop: Optional[np.ndarray]
 ) -> Optional[str]:
-    """Persist a gallery face's tight crop so its clarity can be re-scored later."""
+    """Save a face crop as the visitor thumbnail. Returns the path or None.
+
+    The encode + disk write runs off the event loop so the single-process
+    pipeline (and the live feed) is never stalled by JPEG I/O on the hot path.
+    """
     if face_crop is None or face_crop.size == 0:
         return None
+    return await asyncio.to_thread(_write_thumbnail_sync, visitor_id, face_crop)
+
+
+def _write_face_crop_sync(
+    visitor_id: UUID, face_id: UUID, face_crop: np.ndarray
+) -> Optional[str]:
+    """Blocking gallery-crop write. Run via a worker thread."""
     out_dir = Path(settings.VISITOR_PHOTO_DIR) / str(visitor_id) / "faces"
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{face_id}.jpg"
@@ -59,7 +69,22 @@ def _save_face_crop(
     return str(path)
 
 
-def _add_gallery_face(
+async def _save_face_crop(
+    visitor_id: UUID, face_id: UUID, face_crop: Optional[np.ndarray]
+) -> Optional[str]:
+    """Persist a gallery face's tight crop so its clarity can be re-scored later.
+
+    Off-loaded to a worker thread (see _save_thumbnail) to keep the event loop
+    free during enrollment.
+    """
+    if face_crop is None or face_crop.size == 0:
+        return None
+    return await asyncio.to_thread(
+        _write_face_crop_sync, visitor_id, face_id, face_crop
+    )
+
+
+async def _add_gallery_face(
     db: AsyncSession,
     visitor_id: UUID,
     embedding: list,
@@ -80,7 +105,7 @@ def _add_gallery_face(
         roll=pose.roll if pose else None,
         source_camera_id=camera_id,
     )
-    face.crop_path = _save_face_crop(visitor_id, face.id, face_crop)
+    face.crop_path = await _save_face_crop(visitor_id, face.id, face_crop)
     db.add(face)
     return face
 
@@ -125,12 +150,12 @@ async def register_new_visitor(
     db.add(visitor)
     await db.flush()  # assign PK / make it queryable in this tx
 
-    _add_gallery_face(
+    await _add_gallery_face(
         db, visitor.id, face_embedding, det_score, pose, face_crop,
         camera_id=camera_id,
     )
 
-    thumb = _save_thumbnail(visitor.id, face_crop)
+    thumb = await _save_thumbnail(visitor.id, face_crop)
     if thumb:
         visitor.thumbnail_path = thumb
 
@@ -186,8 +211,8 @@ async def add_face_to_gallery(
         ) >= _GALLERY_NEAR_DUP_SIM:
             return
 
-    def _add():
-        face = _add_gallery_face(
+    async def _add():
+        face = await _add_gallery_face(
             db, visitor_id, embedding, det_score, pose, face_crop,
             camera_id=camera_id,
         )
@@ -197,7 +222,7 @@ async def add_face_to_gallery(
     if total < settings.MAX_FACES_PER_VISITOR:
         # Gallery has room — add if this bin isn't over its cap
         if current_bin_count < max_per_bin:
-            _add()
+            await _add()
         return
 
     # Gallery is full — smart eviction
@@ -208,7 +233,7 @@ async def add_face_to_gallery(
             await _delete_gallery_face(db, worst)
             if existing_faces is not None and worst in existing_faces:
                 existing_faces.remove(worst)
-            _add()
+            await _add()
     else:
         # Bin already has enough faces — only replace worst-quality in same bin
         worst_in_bin = (
@@ -219,7 +244,7 @@ async def add_face_to_gallery(
             await _delete_gallery_face(db, worst_in_bin)
             if existing_faces is not None and worst_in_bin in existing_faces:
                 existing_faces.remove(worst_in_bin)
-            _add()
+            await _add()
 
 
 def _find_eviction_candidate(
@@ -525,7 +550,7 @@ async def update_after_match(
 
     if det_score > (visitor.best_face_det_score or 0.0):
         visitor.best_face_det_score = det_score
-        thumb = _save_thumbnail(visitor.id, face_crop)
+        thumb = await _save_thumbnail(visitor.id, face_crop)
         if thumb:
             visitor.thumbnail_path = thumb
 
@@ -574,7 +599,7 @@ async def clean_visitor_gallery(db: AsyncSession, visitor_id: UUID) -> dict:
     if keeper is not None:
         if keeper.crop_path and Path(keeper.crop_path).exists():
             crop = cv2.imread(keeper.crop_path)
-            thumb = _save_thumbnail(visitor_id, crop)
+            thumb = await _save_thumbnail(visitor_id, crop)
             if thumb:
                 visitor.thumbnail_path = thumb
         survivors = [f for f, _ in scored if f is keeper or f.clarity_score is None

@@ -9,15 +9,20 @@ const config: Config = {
     extend: {
       colors: {
         // Modern slate-based dark theme with deeper backgrounds.
-        bg: "#0A0F1E",        // deeper than slate-900
-        surface: "#131A2B",   // glass card base
+        bg: "#080C18",        // deeper, richer base
+        "bg-soft": "#0A0F1E",
+        surface: "#121A2B",   // glass card base
         "surface-2": "#1B2438",
+        "surface-3": "#222D45",
         card: "#2A3650",      // borders / dividers
+        hairline: "rgba(255,255,255,0.06)",
         primary: "#3B82F6",   // blue-500
         "primary-bright": "#60A5FA",
         success: "#10B981",   // emerald-500
+        "success-bright": "#34D399",
         warning: "#F59E0B",   // amber-500
         danger: "#EF4444",    // red-500
+        "danger-bright": "#F87171",
         accent: "#8B5CF6",    // violet-500
         "accent-bright": "#A78BFA",
         "text-primary": "#F8FAFC",   // slate-50
@@ -27,6 +32,7 @@ const config: Config = {
       borderRadius: {
         card: "16px",
         control: "10px",
+        pill: "9999px",
       },
       fontFamily: {
         sans: ["var(--font-inter)", "system-ui", "sans-serif"],
@@ -35,9 +41,13 @@ const config: Config = {
         glow: "0 0 0 1px rgba(59,130,246,0.15), 0 8px 30px -8px rgba(59,130,246,0.25)",
         "glow-accent": "0 0 0 1px rgba(139,92,246,0.15), 0 8px 30px -8px rgba(139,92,246,0.25)",
         card: "0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -12px rgba(0,0,0,0.5)",
+        "card-lg": "0 2px 4px rgba(0,0,0,0.35), 0 18px 50px -18px rgba(0,0,0,0.65)",
+        "inner-top": "inset 0 1px 0 0 rgba(255,255,255,0.05)",
       },
       backgroundImage: {
         "gradient-primary": "linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%)",
+        "gradient-primary-soft":
+          "linear-gradient(135deg, rgba(59,130,246,0.18) 0%, rgba(139,92,246,0.18) 100%)",
         "gradient-surface": "linear-gradient(180deg, rgba(27,36,56,0.6) 0%, rgba(19,26,43,0.6) 100%)",
         "grid-faint":
           "radial-gradient(circle at 1px 1px, rgba(148,163,184,0.06) 1px, transparent 0)",
@@ -46,6 +56,14 @@ const config: Config = {
         "fade-in": {
           "0%": { opacity: "0", transform: "translateY(6px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+        "fade-in-up": {
+          "0%": { opacity: "0", transform: "translateY(12px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+        "scale-in": {
+          "0%": { opacity: "0", transform: "scale(0.97)" },
+          "100%": { opacity: "1", transform: "scale(1)" },
         },
         shimmer: {
           "100%": { transform: "translateX(100%)" },
@@ -73,6 +91,8 @@ const config: Config = {
       },
       animation: {
         "fade-in": "fade-in 0.3s ease-out",
+        "fade-in-up": "fade-in-up 0.4s cubic-bezier(0.16,1,0.3,1)",
+        "scale-in": "scale-in 0.25s cubic-bezier(0.16,1,0.3,1)",
         shimmer: "shimmer 1.5s infinite",
         "pulse-ring": "pulse-ring 2s infinite",
         "toast-in": "toast-in 0.3s ease-out forwards",

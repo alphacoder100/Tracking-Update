@@ -89,21 +89,55 @@ async def _auto_tuning_loop():
         await asyncio.sleep(interval)
 
 
+async def _purge_in_batches(db: AsyncSession, sql: str, params: dict, label: str) -> int:
+    """Delete matching rows in bounded batches so each DELETE stays short and
+    never holds a long lock on the local database. Returns the total removed."""
+    batch = max(100, int(settings.RETENTION_PURGE_BATCH_SIZE))
+    total = 0
+    while True:
+        result = await db.execute(text(sql), {**params, "batch": batch})
+        await db.commit()
+        removed = result.rowcount or 0
+        total += removed
+        if removed < batch:
+            break
+        await asyncio.sleep(0)  # yield to the event loop between batches
+    if total:
+        logger.info("Retention purge removed %d %s.", total, label)
+    return total
+
+
 async def _retention_loop():
-    """Purge visitors whose last_seen_at is older than the retention window."""
-    if settings.VISITOR_RETENTION_DAYS <= 0:
+    """Purge visitors whose last_seen_at is older than the retention window, and
+    (separately) old detection_events. Both are batched and local-only."""
+    if settings.VISITOR_RETENTION_DAYS <= 0 and settings.DETECTION_EVENT_RETENTION_DAYS <= 0:
         return
     while True:
+        now = datetime.now(timezone.utc)
         try:
-            cutoff = datetime.now(timezone.utc) - timedelta(days=settings.VISITOR_RETENTION_DAYS)
             async with AsyncSessionLocal() as db:
-                result = await db.execute(
-                    text("DELETE FROM visitors WHERE last_seen_at IS NOT NULL AND last_seen_at < :cutoff"),
-                    {"cutoff": cutoff},
-                )
-                await db.commit()
-                if result.rowcount:
-                    logger.info("Retention purge removed %d visitor(s).", result.rowcount)
+                if settings.VISITOR_RETENTION_DAYS > 0:
+                    cutoff = now - timedelta(days=settings.VISITOR_RETENTION_DAYS)
+                    await _purge_in_batches(
+                        db,
+                        "DELETE FROM visitors WHERE id IN ("
+                        "  SELECT id FROM visitors"
+                        "  WHERE last_seen_at IS NOT NULL AND last_seen_at < :cutoff"
+                        "  LIMIT :batch)",
+                        {"cutoff": cutoff},
+                        "visitor(s)",
+                    )
+                if settings.DETECTION_EVENT_RETENTION_DAYS > 0:
+                    de_cutoff = now - timedelta(days=settings.DETECTION_EVENT_RETENTION_DAYS)
+                    await _purge_in_batches(
+                        db,
+                        "DELETE FROM detection_events WHERE id IN ("
+                        "  SELECT id FROM detection_events"
+                        "  WHERE detected_at < :cutoff"
+                        "  LIMIT :batch)",
+                        {"cutoff": de_cutoff},
+                        "detection event(s)",
+                    )
         except Exception as exc:
             logger.warning("Retention purge failed: %s", exc)
         await asyncio.sleep(settings.RETENTION_PURGE_INTERVAL_HOURS * 3600)
@@ -233,15 +267,19 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS middleware — temporarily disabled for WebSocket debugging
-# WebSocket upgrade requests need special handling that FastAPI's CORS middleware doesn't support well
-# app.add_middleware(
-#     CORSMiddleware,
-#     allow_origins=["*"],
-#     allow_credentials=True,
-#     allow_methods=["*"],
-#     allow_headers=["*"],
-# )
+# CORS — scoped to the configured dashboard origin(s). Browsers do not apply CORS
+# to WebSocket upgrades, so this middleware does not affect the /ws/live-feed
+# handshake (enforce WS origin checks in the endpoint itself if needed). Never use
+# allow_origins=["*"] together with allow_credentials=True — it is rejected by
+# browsers and would silently disable credentialed requests.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["X-Process-Time-Ms"],
+)
 
 
 @app.middleware("http")

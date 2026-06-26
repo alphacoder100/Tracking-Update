@@ -8,44 +8,83 @@
 
 html,
 body {
-  background-color: #0a0f1e;
+  background-color: #080c18;
   color: #f8fafc;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
-/* Ambient background: faint dotted grid + soft radial glows. */
+/* Ambient background: faint dotted grid + soft corner glows for depth. */
 body {
   background-image:
-    radial-gradient(circle at 1px 1px, rgba(148, 163, 184, 0.05) 1px, transparent 0),
-    radial-gradient(800px circle at 0% 0%, rgba(59, 130, 246, 0.08), transparent 45%),
-    radial-gradient(700px circle at 100% 100%, rgba(139, 92, 246, 0.07), transparent 45%);
-  background-size: 22px 22px, 100% 100%, 100% 100%;
+    radial-gradient(circle at 1px 1px, rgba(148, 163, 184, 0.045) 1px, transparent 0),
+    radial-gradient(900px circle at 0% -5%, rgba(59, 130, 246, 0.10), transparent 50%),
+    radial-gradient(760px circle at 100% 105%, rgba(139, 92, 246, 0.09), transparent 50%);
+  background-size: 24px 24px, 100% 100%, 100% 100%;
   background-attachment: fixed;
+}
+
+/* Tabular numerals for metrics so values don't jiggle as they update. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* Text selection in the brand tint. */
+::selection {
+  background: rgba(96, 165, 250, 0.28);
+  color: #f8fafc;
 }
 
 /* Thin custom scrollbar to match the dark theme. */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 9px;
+  height: 9px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
   background: #2a3650;
-  border-radius: 8px;
+  border-radius: 9px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #3b4a6b;
+  background-clip: padding-box;
 }
 
-/* Reusable glass surface. */
+/* Reusable surfaces + helpers. */
 @layer components {
+  /* Base glass card: subtle border, blur, and an inner top highlight that gives
+     every surface a faint sheen (premium depth without heavier shadows). */
   .glass {
-    @apply border border-white/5 bg-surface/70 backdrop-blur-xl;
+    @apply border border-white/[0.06] bg-surface/70 backdrop-blur-xl;
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.04);
   }
   .glass-hover {
-    @apply transition-all duration-200 hover:border-white/10 hover:bg-surface;
+    @apply transition-all duration-200 hover:-translate-y-0.5 hover:border-white/10 hover:bg-surface hover:shadow-card-lg;
   }
+  /* A stronger, more opaque panel for nested / emphasis surfaces. */
+  .glass-strong {
+    @apply border border-white/10 bg-surface-2/80 backdrop-blur-xl;
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+  }
+  /* Brand gradient text (titles, hero numbers). */
+  .gradient-text {
+    @apply bg-gradient-primary bg-clip-text text-transparent;
+  }
+  /* Hairline divider tuned for the dark theme. */
+  .divider {
+    @apply border-t border-white/[0.06];
+  }
+  /* Uppercase micro-label used on section/eyebrow headings. */
+  .eyebrow {
+    @apply text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted;
+  }
+
   /* Skeleton shimmer block. */
   .skeleton {
     @apply relative overflow-hidden rounded-control bg-card/40;
