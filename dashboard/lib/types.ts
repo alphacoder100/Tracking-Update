@@ -256,6 +256,7 @@ export interface VideoStreamResponse {
   source: string;
   size_mb: number;
   looping: boolean;
+  camera_id: string;
 }
 
 export interface LiveFeedMessage {

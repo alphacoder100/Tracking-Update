@@ -13,7 +13,6 @@ from app.api import verify_api_key
 from app.config import settings
 from app.schemas import CameraStartRequest, CameraStatusResponse, RoiRequest, RoiResponse, BoundingBox
 from app.services.camera_manager import CameraManager
-from app.services.camera_service import CameraService
 from app.utils import is_video_upload
 
 logger = logging.getLogger(__name__)
@@ -48,15 +47,21 @@ async def upload_video_stream(
     file: UploadFile = File(...),
     fps: Optional[float] = Form(None),
     loop: bool = Form(False),
+    camera_id: Optional[str] = Form(None),
     _key: str = Security(verify_api_key),
 ):
     """
     Upload a video file and start streaming it through the detection pipeline.
 
-    The file is persisted to disk and the camera service is pointed at it, so the
-    annotated live feed (with bounding boxes + recognition labels) and the live
-    stats apply exactly as they do for a webcam — viewable on the Video Studio /
-    Live Monitor pages via the snapshot poller.
+    The file is persisted to disk and a camera service is pointed at it, so the
+    annotated feed (with bounding boxes + recognition labels) and the live stats
+    apply exactly as they do for a webcam — viewable on the Video Studio / Live
+    Monitor pages via the snapshot poller.
+
+    Pass ``camera_id`` to run the video as a specific named camera. This is what
+    lets the Video Studio upload two videos at once (an entry-camera video and an
+    exit-camera video) so the entry→exit gate tracker can pair them. When omitted
+    the default single-camera id is used, preserving the single-stream behaviour.
     """
     if not is_video_upload(file.filename, file.content_type):
         raise HTTPException(status_code=400, detail="File does not look like a video.")
@@ -78,14 +83,16 @@ async def upload_video_stream(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Could not save upload: {exc}")
 
-    cam = CameraService.get_instance()
-    if cam.is_running:
-        await cam.stop()
+    manager = CameraManager.get_instance()
+    cid = (camera_id or "").strip() or settings.CAMERA_ID
+    existing = manager.get(cid)
+    if existing is not None and existing.is_running:
+        await manager.stop(cid)
 
     try:
-        await cam.start(
+        cam = await manager.start(
             source=path,
-            camera_id=f"video:{os.path.basename(file.filename or 'upload')}",
+            camera_id=cid,
             fps=fps or settings.CAMERA_FPS,
             loop=loop,
         )
@@ -98,6 +105,7 @@ async def upload_video_stream(
         "source": path,
         "size_mb": round(len(contents) / (1024 * 1024), 2),
         "looping": loop,
+        "camera_id": cam.camera_id,
     }
 
 
