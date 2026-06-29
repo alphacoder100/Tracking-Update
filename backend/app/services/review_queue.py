@@ -233,3 +233,68 @@ async def resolve_flag(db: AsyncSession, flag_id: UUID) -> bool:
     except Exception as exc:
         logger.error("Could not resolve flag %s: %s", flag_id, exc)
         return False
+
+
+async def resolve_flag_with_merge(db: AsyncSession, flag_id: UUID) -> dict:
+    """
+    Resolve a single review flag, MERGING when it's an actionable duplicate.
+
+    For a `probable_duplicate` flag that recorded which existing visitor it
+    resembled, this folds the flagged (source) visitor INTO that existing visitor
+    — collapsing the pair into one user, the same direction as the bulk
+    `auto_merge_duplicates` sweep but for one operator-reviewed flag. The merge
+    deletes the source visitor, whose `review_queue` row is removed by ON DELETE
+    CASCADE, so the flag is gone without a separate resolve.
+
+    Unlike the bulk sweep there is NO confidence floor here: the operator has
+    seen the side-by-side faces and made the call, so their click is the gate. A
+    self-reference or an already-merged/missing target falls back to a plain
+    resolve (nothing to merge into). Every non-duplicate flag type is simply
+    marked resolved.
+
+    Returns {merged, resolved, target_visitor_id?}.
+    """
+    from app.services.visitor_merge import MergeError, merge_visitors
+
+    try:
+        row = (await db.execute(text("""
+            SELECT visitor_id, matched_visitor_id, flag_type, similarity
+            FROM review_queue
+            WHERE id = :fid
+        """), {"fid": str(flag_id)})).first()
+    except Exception as exc:
+        logger.error("resolve_flag_with_merge lookup failed for %s: %s", flag_id, exc)
+        row = None
+
+    if (
+        row is not None
+        and row.flag_type == "probable_duplicate"
+        and row.matched_visitor_id is not None
+        and row.visitor_id != row.matched_visitor_id
+    ):
+        try:
+            await merge_visitors(
+                db,
+                row.visitor_id,
+                row.matched_visitor_id,
+                reason="review_resolve",
+                similarity=row.similarity,
+                merged_by="review",
+            )
+            logger.info(
+                "Resolved flag %s by merging visitor %s into %s.",
+                flag_id, row.visitor_id, row.matched_visitor_id,
+            )
+            return {
+                "merged": True,
+                "resolved": True,
+                "target_visitor_id": str(row.matched_visitor_id),
+            }
+        except MergeError as exc:
+            # Target missing / already merged away — fall through to plain resolve.
+            logger.info(
+                "Flag %s merge skipped (%s); resolving without merge.", flag_id, exc
+            )
+
+    ok = await resolve_flag(db, flag_id)
+    return {"merged": False, "resolved": ok}

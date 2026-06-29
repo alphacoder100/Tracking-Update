@@ -377,8 +377,18 @@ export default function ReviewQueuePage() {
                       onClick={() => resolve(flag.id)}
                       disabled={resolving === flag.id}
                     >
-                      <Check className="h-4 w-4" />
-                      {resolving === flag.id ? "…" : "Resolve"}
+                      {flag.flag_type === "probable_duplicate" &&
+                      flag.matched_visitor_id ? (
+                        <Combine className="h-4 w-4" />
+                      ) : (
+                        <Check className="h-4 w-4" />
+                      )}
+                      {resolving === flag.id
+                        ? "…"
+                        : flag.flag_type === "probable_duplicate" &&
+                            flag.matched_visitor_id
+                          ? "Resolve & merge"
+                          : "Resolve"}
                     </Button>
                     {cleanResult[flag.id] && (
                       <span className="max-w-[10rem] text-right text-[10px] text-text-muted">

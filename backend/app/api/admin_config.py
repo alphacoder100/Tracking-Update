@@ -597,11 +597,13 @@ async def resolve_review_flag(
     _key: str = Security(verify_admin_api_key),
     db: AsyncSession = Depends(get_db),
 ):
-    """Mark a review flag as resolved."""
+    """Resolve a review flag. For a probable-duplicate it MERGES the flagged
+    visitor into the existing one it matched (collapsing the pair into one user);
+    every other flag type is simply marked resolved."""
     import uuid
-    from app.services.review_queue import resolve_flag
-    ok = await resolve_flag(db, uuid.UUID(flag_id))
-    return {"success": ok, "flag_id": flag_id}
+    from app.services.review_queue import resolve_flag_with_merge
+    result = await resolve_flag_with_merge(db, uuid.UUID(flag_id))
+    return {"success": result["resolved"], "flag_id": flag_id, **result}
 
 
 @router.post("/visitors/{visitor_id}/clean-faces")
