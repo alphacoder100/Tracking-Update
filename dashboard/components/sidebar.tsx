@@ -11,9 +11,11 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardCheck,
+  FlaskConical,
   LayoutDashboard,
   LayoutGrid,
   Clapperboard,
+  ScanFace,
   Settings,
   Users,
   UtensilsCrossed,
@@ -21,7 +23,7 @@ import {
 } from "lucide-react";
 
 import { fetcher } from "@/lib/api";
-import type { HealthResponse, ReviewFlag } from "@/lib/types";
+import type { HealthResponse, ModelStatus, ReviewFlag } from "@/lib/types";
 import { useSidebar } from "@/components/sidebar-context";
 
 const NAV = [
@@ -30,6 +32,7 @@ const NAV = [
   { href: "/visitors", label: "Visitors", icon: Users },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/ai", label: "AI Diagnostics", icon: BrainCircuit },
+  { href: "/benchmarks", label: "Benchmarks", icon: FlaskConical },
   { href: "/activity", label: "Activity", icon: Activity },
   { href: "/review", label: "Review Queue", icon: ClipboardCheck, badgeKey: "review" },
   { href: "/multicam", label: "Multicam", icon: LayoutGrid },
@@ -58,6 +61,9 @@ export function Sidebar() {
 
   const { data: health } = useSWR<HealthResponse>("health", fetcher, {
     refreshInterval: 10000,
+  });
+  const { data: modelStatus } = useSWR<ModelStatus>("admin/models", fetcher, {
+    refreshInterval: 30000,
   });
   const { data: flags } = useSWR<ReviewFlag[]>("admin/review-queue?limit=99", fetcher, {
     refreshInterval: 20000,
@@ -193,6 +199,11 @@ export function Sidebar() {
           <Dot ok={!!health?.camera_running} />
           <Dot ok={!!health?.models_loaded} />
           <Dot ok={health?.database === "connected"} />
+          {modelStatus && (
+            <span title={`Recognition: ${modelStatus.insightface_model}`}>
+              <ScanFace className="h-3.5 w-3.5 text-text-muted" />
+            </span>
+          )}
         </div>
       ) : (
         <div className="p-3">
@@ -219,6 +230,18 @@ export function Sidebar() {
                 {health?.database ?? "—"}
               </span>
             </div>
+            {modelStatus && (
+              <div className="flex items-center gap-2">
+                <ScanFace className="h-3 w-3 shrink-0 text-text-muted" />
+                <span className="text-text-muted">Recognition</span>
+                <span
+                  className="ml-auto max-w-[7rem] truncate text-right font-medium text-text-secondary"
+                  title={modelStatus.insightface_model}
+                >
+                  {modelStatus.insightface_model}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       )}

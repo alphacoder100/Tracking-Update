@@ -10,8 +10,10 @@ mutates the in-process `settings` object so every subsequent request sees the
 new value immediately.
 """
 
+import json
 import logging
-from typing import Any, Dict, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Security
 from fastapi.concurrency import run_in_threadpool
@@ -249,6 +251,317 @@ async def set_device(
 
     logger.info("Processing device switched to %s (requested=%s).", resolved, requested)
     return _device_status()
+
+
+# ── Model selection (detector / recognition) ─────────────────
+#
+# Swap the person-detection (YOLO) and/or face-recognition (InsightFace) models
+# live — reloads in-process onto the current device (no restart). YOLO weights
+# auto-download via Ultralytics; InsightFace packs via the model zoo.
+#
+# IMPORTANT: all buffalo_* and antelopev2 packs emit 512-d embeddings, so swapping
+# among them does NOT break the Vector(512) gallery column. But each recognition
+# model lives in its OWN embedding space, so existing gallery vectors stop matching
+# the new model — returning-visitor recognition is degraded until the gallery is
+# re-enrolled. The POST therefore refuses a recognition-model change unless the
+# caller passes confirm_recognition_change=true.
+
+_KNOWN_YOLO = [
+    "yolov8n.pt", "yolov8s.pt", "yolov8m.pt", "yolov8l.pt",
+    "yolo11n.pt", "yolo11s.pt", "yolo11m.pt",
+]
+_KNOWN_INSIGHTFACE = ["buffalo_l", "buffalo_m", "buffalo_s", "buffalo_sc", "antelopev2"]
+
+
+def _local_yolo_weights() -> List[str]:
+    """*.pt files sitting in the backend working dir (operator-supplied weights)."""
+    try:
+        return sorted(p.name for p in Path(".").glob("*.pt"))
+    except Exception:
+        return []
+
+
+def _yolo_choices() -> List[str]:
+    return sorted(set(_KNOWN_YOLO) | set(_local_yolo_weights()))
+
+
+async def _gallery_counts(db: AsyncSession) -> tuple[int, int]:
+    """(visitor_count, gallery_face_count) — used for the rebuild warning."""
+    try:
+        v = (await db.execute(text("SELECT COUNT(*) FROM visitors"))).scalar() or 0
+        f = (await db.execute(text("SELECT COUNT(*) FROM visitor_faces"))).scalar() or 0
+        return int(v), int(f)
+    except Exception:
+        return 0, 0
+
+
+async def _models_payload(db: AsyncSession) -> Dict[str, Any]:
+    from app.ml_models import ModelManager
+
+    mgr = ModelManager.get_instance()
+    visitors, faces = await _gallery_counts(db)
+    return {
+        "yolo_model": settings.YOLO_MODEL_PATH,
+        "insightface_model": settings.INSIGHTFACE_MODEL_NAME,
+        "yolo_options": _yolo_choices(),
+        "insightface_options": _KNOWN_INSIGHTFACE,
+        "device": mgr.device,
+        "models_loaded": mgr.is_loaded,
+        "gallery_visitor_count": visitors,
+        "gallery_face_count": faces,
+    }
+
+
+async def _persist_runtime(db: AsyncSession, values: Dict[str, str]) -> None:
+    """Best-effort upsert of key/value pairs into runtime_settings."""
+    for key, value in values.items():
+        try:
+            await db.execute(
+                text("""
+                    INSERT INTO runtime_settings (key, value, updated_at)
+                    VALUES (:key, :value, NOW())
+                    ON CONFLICT (key) DO UPDATE
+                      SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at
+                """),
+                {"key": key, "value": value},
+            )
+        except Exception:
+            pass  # table may not exist yet — not critical
+    try:
+        await db.commit()
+    except Exception:
+        pass
+
+
+class ModelPatch(BaseModel):
+    yolo_model: Optional[str] = None
+    insightface_model: Optional[str] = None
+    confirm_recognition_change: bool = False
+
+    @model_validator(mode="after")
+    def check(self) -> "ModelPatch":
+        if self.yolo_model is None and self.insightface_model is None:
+            raise ValueError("Provide yolo_model and/or insightface_model.")
+        if (
+            self.insightface_model is not None
+            and self.insightface_model not in _KNOWN_INSIGHTFACE
+        ):
+            raise ValueError(
+                f"insightface_model must be one of {_KNOWN_INSIGHTFACE}"
+            )
+        return self
+
+
+@router.get("/models")
+async def get_models(
+    db: AsyncSession = Depends(get_db),
+    _key: str = Security(verify_admin_api_key),
+):
+    """Current detector / recognition models, available choices, and gallery size."""
+    return await _models_payload(db)
+
+
+@router.post("/models")
+async def set_models(
+    body: ModelPatch,
+    db: AsyncSession = Depends(get_db),
+    _key: str = Security(verify_admin_api_key),
+):
+    """Swap the detector and/or recognition model live (reloads in-process)."""
+    from app.ml_models import ModelManager, resolve_device
+    from app.utils import _get_inference_semaphore
+
+    new_yolo = settings.YOLO_MODEL_PATH
+    new_face = settings.INSIGHTFACE_MODEL_NAME
+
+    if body.yolo_model is not None:
+        if body.yolo_model not in set(_yolo_choices()):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Unknown yolo_model '{body.yolo_model}'. Choose one of "
+                    f"{_yolo_choices()} or drop the .pt file in the backend dir."
+                ),
+            )
+        new_yolo = body.yolo_model
+
+    recognition_changing = (
+        body.insightface_model is not None
+        and body.insightface_model != settings.INSIGHTFACE_MODEL_NAME
+    )
+    if recognition_changing and not body.confirm_recognition_change:
+        _, faces = await _gallery_counts(db)
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Switching the recognition model to '{body.insightface_model}' makes the "
+                f"existing {faces} gallery embedding(s) incompatible — they live in the "
+                f"current model's embedding space, so returning visitors will not match "
+                f"until the gallery is rebuilt/re-enrolled. Resend with "
+                f"confirm_recognition_change=true to proceed."
+            ),
+        )
+    if body.insightface_model is not None:
+        new_face = body.insightface_model
+
+    semaphore = _get_inference_semaphore()
+    resolved = resolve_device(settings.DEVICE)
+    async with semaphore:
+        try:
+            await run_in_threadpool(
+                ModelManager.get_instance().reload, resolved, new_yolo, new_face
+            )
+        except Exception as exc:
+            logger.exception("Model reload failed (yolo=%s, face=%s): %s", new_yolo, new_face, exc)
+            raise HTTPException(status_code=500, detail=f"Failed to reload models: {exc}")
+
+    object.__setattr__(settings, "YOLO_MODEL_PATH", new_yolo)
+    object.__setattr__(settings, "INSIGHTFACE_MODEL_NAME", new_face)
+    await _persist_runtime(
+        db,
+        {"YOLO_MODEL_PATH": new_yolo, "INSIGHTFACE_MODEL_NAME": new_face},
+    )
+    logger.info("Models switched: yolo=%s, insightface=%s", new_yolo, new_face)
+    return await _models_payload(db)
+
+
+# ── Saved benchmark reports (from `python -m benchmark ...`) ──
+
+_BENCH_DIR = Path("storage/benchmarks")
+
+
+@router.get("/benchmarks")
+async def list_benchmarks(_key: str = Security(verify_admin_api_key)):
+    """List saved benchmark runs (newest first) with a light summary."""
+    if not _BENCH_DIR.is_dir():
+        return []
+    out: List[dict] = []
+    for p in sorted(_BENCH_DIR.glob("*.json"), reverse=True):
+        try:
+            data = json.loads(p.read_text())
+        except Exception:
+            continue
+        out.append({
+            "name": p.stem,
+            "kind": data.get("kind"),
+            "generated_at": data.get("generated_at"),
+            "meta": data.get("meta", {}),
+            "model_count": len(data.get("results", [])),
+        })
+    return out
+
+
+class BenchmarkRunRequest(BaseModel):
+    kind: str = "recognition"
+    models: List[str]
+    align: str = "resize"           # resize (fast, fair A/B) | detect (realistic)
+    device: str = "cpu"             # cpu keeps the live GPU free during eval
+
+    @model_validator(mode="after")
+    def check(self) -> "BenchmarkRunRequest":
+        if self.kind != "recognition":
+            # Detection accuracy needs labelled frames, which live data lacks; only
+            # recognition can be scored against the accumulated gallery crops.
+            raise ValueError("Only kind='recognition' can be evaluated on live data.")
+        if not self.models:
+            raise ValueError("Provide at least one model to evaluate.")
+        bad = [m for m in self.models if m not in _KNOWN_INSIGHTFACE]
+        if bad:
+            raise ValueError(f"Unknown recognition model(s): {bad}")
+        if self.align not in ("resize", "detect"):
+            raise ValueError("align must be 'resize' or 'detect'.")
+        if self.device not in ("cpu", "cuda", "auto"):
+            raise ValueError("device must be 'cpu', 'cuda' or 'auto'.")
+        return self
+
+
+@router.post("/benchmarks/run")
+async def run_benchmark(
+    body: BenchmarkRunRequest,
+    _key: str = Security(verify_admin_api_key),
+):
+    """Evaluate one or more recognition models on the live gallery (subprocess)."""
+    from app.services.benchmark_runner import BenchmarkRunner
+
+    runner = BenchmarkRunner.get_instance()
+    try:
+        await runner.start(body.kind, body.models, body.align, body.device)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    return runner.status()
+
+
+@router.get("/benchmarks/run")
+async def benchmark_run_status(_key: str = Security(verify_admin_api_key)):
+    """Current benchmark-run status + rolling log tail (poll while running)."""
+    from app.services.benchmark_runner import BenchmarkRunner
+
+    return BenchmarkRunner.get_instance().status()
+
+
+@router.get("/benchmarks/leaderboard")
+async def benchmark_leaderboard(
+    kind: str = "recognition",
+    _key: str = Security(verify_admin_api_key),
+):
+    """Best-scoring result PER MODEL across all saved reports, ranked, with the
+    currently-active model and the winner flagged."""
+    rank_key = "auc" if kind == "recognition" else "ap50"
+    best_per_model: Dict[str, dict] = {}
+    if _BENCH_DIR.is_dir():
+        for p in sorted(_BENCH_DIR.glob(f"{kind}-*.json")):
+            try:
+                data = json.loads(p.read_text())
+            except Exception:
+                continue
+            for r in data.get("results", []):
+                model = r.get("model")
+                score = r.get(rank_key)
+                if model is None or score is None:
+                    continue
+                prev = best_per_model.get(model)
+                if prev is None or score > prev["_score"]:
+                    best_per_model[model] = {
+                        **r,
+                        "_score": score,
+                        "source_report": p.stem,
+                        "generated_at": data.get("generated_at"),
+                        "align": (data.get("meta", {}) or {}).get("align"),
+                    }
+
+    active = (
+        settings.INSIGHTFACE_MODEL_NAME
+        if kind == "recognition"
+        else settings.YOLO_MODEL_PATH
+    )
+    rows = sorted(best_per_model.values(), key=lambda r: r["_score"], reverse=True)
+    best = rows[0]["model"] if rows else None
+    for r in rows:
+        r["is_active"] = r["model"] == active
+        r["is_best"] = r["model"] == best
+        r.pop("_score", None)
+
+    options = _KNOWN_INSIGHTFACE if kind == "recognition" else _yolo_choices()
+    return {
+        "kind": kind,
+        "active_model": active,
+        "best_model": best,
+        "models": rows,
+        "all_candidates": options,
+    }
+
+
+@router.get("/benchmarks/{name}")
+async def get_benchmark(name: str, _key: str = Security(verify_admin_api_key)):
+    """Return one saved benchmark report by name (full JSON)."""
+    safe = Path(name).name  # strip any path components — no traversal
+    p = _BENCH_DIR / f"{safe}.json"
+    if not p.is_file():
+        raise HTTPException(status_code=404, detail="Benchmark not found.")
+    try:
+        return json.loads(p.read_text())
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Could not read benchmark: {exc}")
 
 
 @router.get("/review-queue")

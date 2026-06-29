@@ -180,23 +180,37 @@ async def lifespan(app: FastAPI):
     torch.set_num_threads(cpu_threads)
     logger.info("PyTorch CPU thread count set to %d.", cpu_threads)
 
-    # Honour a device choice persisted from a previous live switch (if any),
-    # otherwise fall back to the configured DEVICE.
+    # Honour device + model choices persisted from previous live switches (if any),
+    # otherwise fall back to the configured values. Loading these BEFORE load_all so
+    # a model swapped from the dashboard survives a restart.
     device = settings.DEVICE
     try:
         async with AsyncSessionLocal() as db:
-            row = (
+            rows = (
                 await db.execute(
-                    text("SELECT value FROM runtime_settings WHERE key = 'DEVICE'")
+                    text(
+                        "SELECT key, value FROM runtime_settings "
+                        "WHERE key IN ('DEVICE', 'YOLO_MODEL_PATH', 'INSIGHTFACE_MODEL_NAME')"
+                    )
                 )
-            ).first()
-            if row and row.value:
-                device = row.value
+            ).all()
+            persisted = {r.key: r.value for r in rows if r.value}
+            if persisted.get("DEVICE"):
+                device = persisted["DEVICE"]
                 object.__setattr__(settings, "DEVICE", device)
+            if persisted.get("YOLO_MODEL_PATH"):
+                object.__setattr__(settings, "YOLO_MODEL_PATH", persisted["YOLO_MODEL_PATH"])
+            if persisted.get("INSIGHTFACE_MODEL_NAME"):
+                object.__setattr__(
+                    settings, "INSIGHTFACE_MODEL_NAME", persisted["INSIGHTFACE_MODEL_NAME"]
+                )
     except Exception:
         pass  # runtime_settings table may not exist yet
 
-    logger.info("Loading ML models (requested device: %s)...", device)
+    logger.info(
+        "Loading ML models (device=%s, yolo=%s, insightface=%s)...",
+        device, settings.YOLO_MODEL_PATH, settings.INSIGHTFACE_MODEL_NAME,
+    )
     ModelManager.get_instance().load_all(
         yolo_path=settings.YOLO_MODEL_PATH,
         insightface_name=settings.INSIGHTFACE_MODEL_NAME,

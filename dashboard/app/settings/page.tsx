@@ -1,11 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import useSWR, { useSWRConfig } from "swr";
 import { Cpu, Info, Loader2, RotateCcw, Save, SlidersHorizontal, Zap } from "lucide-react";
 
+import { Boxes, ScanFace } from "lucide-react";
+
 import { api, fetcher } from "@/lib/api";
-import type { AdminSettings, DeviceStatus } from "@/lib/types";
+import { ApiError } from "@/lib/api";
+import type { AdminSettings, DeviceStatus, ModelStatus } from "@/lib/types";
 import {
   Badge,
   Button,
@@ -231,6 +235,120 @@ function DeviceCard() {
   );
 }
 
+function ModelCard() {
+  const { mutate } = useSWRConfig();
+  const { data, error, isLoading } = useSWR<ModelStatus>("admin/models", fetcher);
+  const [switching, setSwitching] = useState<string | null>(null);
+
+  async function swap(body: Record<string, unknown>, busyKey: string) {
+    setSwitching(busyKey);
+    try {
+      await api.post("admin/models", body);
+      await mutate("admin/models");
+      await mutate("health"); // reflect model-reload in the sidebar status
+    } catch (e) {
+      // 409 = recognition change needs explicit confirmation (handled by callers);
+      // surface any other failure.
+      if (!(e instanceof ApiError) || e.status !== 409) {
+        alert(`Model switch failed: ${(e as Error).message}`);
+      }
+      throw e;
+    } finally {
+      setSwitching(null);
+    }
+  }
+
+  function changeDetector(yolo_model: string) {
+    if (switching || yolo_model === data?.yolo_model) return;
+    void swap({ yolo_model }, "yolo").catch(() => {});
+  }
+
+  function changeRecognition(insightface_model: string) {
+    if (switching || insightface_model === data?.insightface_model) return;
+    const faces = data?.gallery_face_count ?? 0;
+    const ok = window.confirm(
+      `Switch face-recognition model to "${insightface_model}"?\n\n` +
+        `This changes the embedding space, so the existing ${faces} gallery ` +
+        `face(s) will NOT match the new model until the gallery is rebuilt / ` +
+        `re-enrolled. Returning-visitor recognition will be degraded in the ` +
+        `meantime.\n\nProceed?`,
+    );
+    if (!ok) return;
+    void swap(
+      { insightface_model, confirm_recognition_change: true },
+      "insightface",
+    ).catch(() => {});
+  }
+
+  if (error) {
+    return (
+      <Card>
+        <CardTitle>Models</CardTitle>
+        <ErrorState message="Could not load model status. Is ADMIN_API_KEY configured?" />
+      </Card>
+    );
+  }
+  if (isLoading || !data) return <Skeleton className="h-44" />;
+
+  const busy = switching !== null;
+  const yoloOpts = data.yolo_options.map((v) => ({ value: v, label: v }));
+  const faceOpts = data.insightface_options.map((v) => ({ value: v, label: v }));
+
+  return (
+    <Card>
+      <CardTitle
+        icon={<Boxes className="h-4 w-4" />}
+        action={
+          busy ? (
+            <span className="flex items-center gap-1 text-xs text-text-muted">
+              <Loader2 className="h-3 w-3 animate-spin" /> Reloading models…
+            </span>
+          ) : undefined
+        }
+      >
+        Models
+      </CardTitle>
+
+      <p className="mb-3 text-sm text-text-secondary">
+        Swap the detection and recognition models live — reloads in-process onto
+        the current device ({data.device}), no restart. Benchmark candidates first
+        on the{" "}
+        <Link href="/benchmarks" className="text-primary-bright hover:underline">
+          Benchmarks
+        </Link>{" "}
+        page.
+      </p>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <label className="mb-1 flex items-center gap-1.5 text-xs text-text-muted">
+            <ScanFace className="h-3.5 w-3.5" /> Person detector (YOLO)
+          </label>
+          <Select value={data.yolo_model} options={yoloOpts} onChange={changeDetector} />
+          <p className="mt-1 text-[11px] text-text-muted">
+            Safe to A/B — no effect on the face gallery.
+          </p>
+        </div>
+
+        <div>
+          <label className="mb-1 flex items-center gap-1.5 text-xs text-text-muted">
+            <Boxes className="h-3.5 w-3.5" /> Face recognition (InsightFace)
+          </label>
+          <Select
+            value={data.insightface_model}
+            options={faceOpts}
+            onChange={changeRecognition}
+          />
+          <p className="mt-1 text-[11px] text-warning/90">
+            ⚠ Changing this invalidates the {data.gallery_face_count} gallery
+            embeddings — needs re-enrollment.
+          </p>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 export default function SettingsPage() {
   const { mutate } = useSWRConfig();
   const { data, error, isLoading } = useSWR<AdminSettings>("admin/settings", fetcher);
@@ -298,6 +416,8 @@ export default function SettingsPage() {
       </div>
 
       <DeviceCard />
+
+      <ModelCard />
 
       <GateConfig />
 

@@ -313,6 +313,69 @@ export interface DeviceStatus {
   models_loaded: boolean;
 }
 
+// Detector / recognition model selection (from GET/POST /api/admin/models).
+export interface ModelStatus {
+  yolo_model: string;
+  insightface_model: string;
+  yolo_options: string[];
+  insightface_options: string[];
+  device: string;
+  models_loaded: boolean;
+  gallery_visitor_count: number;
+  gallery_face_count: number;
+}
+
+// One model's row in a saved benchmark report.
+export type BenchmarkResult = Record<string, number | string | boolean | null | Record<string, number>>;
+
+// Summary of a saved benchmark run (from GET /api/admin/benchmarks).
+export interface BenchmarkSummary {
+  name: string;
+  kind: "recognition" | "detection";
+  generated_at: string;
+  meta: Record<string, number | string | boolean>;
+  model_count: number;
+}
+
+// Full saved benchmark report (from GET /api/admin/benchmarks/{name}).
+export interface BenchmarkReport {
+  kind: "recognition" | "detection";
+  generated_at: string;
+  meta: Record<string, number | string | boolean>;
+  results: BenchmarkResult[];
+}
+
+// Live benchmark-run status (from GET/POST /api/admin/benchmarks/run).
+export interface BenchmarkRunStatus {
+  status: "idle" | "running" | "done" | "error";
+  kind: string | null;
+  models: string[];
+  align: string | null;
+  device: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  report: string | null;
+  error: string | null;
+  log: string[];
+}
+
+// One model's best-ever result (from GET /api/admin/benchmarks/leaderboard).
+export interface LeaderboardEntry extends BenchmarkResult {
+  model: string;
+  source_report: string;
+  generated_at: string | null;
+  is_active: boolean;
+  is_best: boolean;
+}
+
+export interface Leaderboard {
+  kind: "recognition" | "detection";
+  active_model: string;
+  best_model: string | null;
+  models: LeaderboardEntry[];
+  all_candidates: string[];
+}
+
 export interface VideoStreamResponse {
   status: string;
   filename: string;
