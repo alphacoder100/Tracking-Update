@@ -468,9 +468,10 @@ async def embedding_diagnostics(db: AsyncSession) -> dict:
     centroids = np.vstack(cents).astype(np.float32)  # (V, 512)
 
     # Gallery faces for these visitors (bounded for safety).
-    faces_by_v: dict[str, list[np.ndarray]] = {}
+    # Store (face_id, vec) tuples so we can include the face_id in plot points.
+    faces_by_v: dict[str, list[tuple[str, np.ndarray]]] = {}
     frows = (await db.execute(
-        select(VisitorFace.visitor_id, VisitorFace.embedding)
+        select(VisitorFace.id, VisitorFace.visitor_id, VisitorFace.embedding)
         .where(VisitorFace.visitor_id.in_(uuid_ids))
         .limit(50000)
     )).all()
@@ -478,7 +479,7 @@ async def embedding_diagnostics(db: AsyncSession) -> dict:
         vec = _to_vec(r.embedding)
         if vec is None:
             continue
-        faces_by_v.setdefault(str(r.visitor_id), []).append(vec)
+        faces_by_v.setdefault(str(r.visitor_id), []).append((str(r.id), vec))
 
     # Per-visitor gallery size + within-gallery cohesion (embeddings are
     # L2-normalized, so pairwise_cosine's assume-normalized path is correct).
@@ -486,9 +487,10 @@ async def embedding_diagnostics(db: AsyncSession) -> dict:
     for v in visitors:
         fl = faces_by_v.get(v["visitor_id"], [])
         v["gallery_size"] = len(fl)
-        all_faces.extend(fl)
-        if len(fl) >= 2:
-            sims = pairwise_cosine(fl)
+        vecs = [t[1] for t in fl]
+        all_faces.extend(vecs)
+        if len(vecs) >= 2:
+            sims = pairwise_cosine(vecs)
             if sims.size:
                 v["cohesion"] = round(float(np.mean(sims)), 4)
 
@@ -508,10 +510,11 @@ async def embedding_diagnostics(db: AsyncSession) -> dict:
         take = faces_by_v.get(v["visitor_id"], [])[:_PLOT_MAX_FACES_PER_VISITOR]
         if not take:
             continue
-        pts = _project(np.vstack(take).astype(np.float32), mean, comps)
-        for p in pts:
+        pts = _project(np.vstack([t[1] for t in take]).astype(np.float32), mean, comps)
+        for (face_id, _), p in zip(take, pts):
             faces_out.append({
                 "visitor_id": v["visitor_id"],
+                "face_id": face_id,
                 "x": round(float(p[0]), 4),
                 "y": round(float(p[1]), 4),
             })

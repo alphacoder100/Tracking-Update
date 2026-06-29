@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -19,7 +19,13 @@ import {
   ZAxis,
 } from "recharts";
 
+import Link from "next/link";
 import type { EmbeddingCentroid, EmbeddingFacePoint } from "@/lib/types";
+
+const API_BASE =
+  typeof window !== "undefined"
+    ? (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000")
+    : "http://localhost:8000";
 
 const AXIS = "#94A3B8";
 const GRID = "#334155";
@@ -204,6 +210,10 @@ const EMBED_PALETTE = [
  * far apart hints at a contaminated gallery, and two different-colored centroids
  * sitting on top of each other are likely the same person split in two.
  */
+type SelectedPoint =
+  | { kind: "face"; pt: EmbeddingFacePoint }
+  | { kind: "centroid"; pt: EmbeddingCentroid };
+
 export function EmbeddingScatter({
   centroids,
   faces,
@@ -211,6 +221,8 @@ export function EmbeddingScatter({
   centroids: EmbeddingCentroid[];
   faces: EmbeddingFacePoint[];
 }) {
+  const [selected, setSelected] = useState<SelectedPoint | null>(null);
+
   const colorFor = useMemo(() => {
     const m = new Map<string, string>();
     centroids.forEach((c, i) => m.set(c.visitor_id, EMBED_PALETTE[i % EMBED_PALETTE.length]));
@@ -235,21 +247,35 @@ export function EmbeddingScatter({
 
   const FaceShape = (p: { cx?: number; cy?: number; payload?: EmbeddingFacePoint }) => {
     if (p.cx == null || p.cy == null || !p.payload) return <g />;
+    const isSelected =
+      selected?.kind === "face" && selected.pt.face_id === p.payload.face_id;
     return (
-      <circle cx={p.cx} cy={p.cy} r={3} fill={colorFor(p.payload.visitor_id)} fillOpacity={0.45} />
+      <circle
+        cx={p.cx}
+        cy={p.cy}
+        r={isSelected ? 5 : 3}
+        fill={colorFor(p.payload.visitor_id)}
+        fillOpacity={isSelected ? 1 : 0.45}
+        stroke={isSelected ? "#fff" : "none"}
+        strokeWidth={isSelected ? 1.5 : 0}
+        style={{ cursor: p.payload.face_id ? "pointer" : "default" }}
+      />
     );
   };
 
   const CentroidShape = (p: { cx?: number; cy?: number; payload?: EmbeddingCentroid }) => {
     if (p.cx == null || p.cy == null || !p.payload) return <g />;
+    const isSelected =
+      selected?.kind === "centroid" && selected.pt.visitor_id === p.payload.visitor_id;
     return (
       <circle
         cx={p.cx}
         cy={p.cy}
-        r={7}
+        r={isSelected ? 9 : 7}
         fill={colorFor(p.payload.visitor_id)}
-        stroke="#0B1220"
+        stroke={isSelected ? "#fff" : "#0B1220"}
         strokeWidth={2}
+        style={{ cursor: "pointer" }}
       />
     );
   };
@@ -271,41 +297,144 @@ export function EmbeddingScatter({
           style={{ backgroundColor: colorFor(pt.visitor_id) }}
         />
         {nameFor(pt.visitor_id)}
-        {isCentroid && (
-          <span style={{ color: AXIS }}> · centroid</span>
-        )}
+        {isCentroid
+          ? <span style={{ color: AXIS }}> · centroid</span>
+          : <span style={{ color: AXIS }}> · click to view photo</span>
+        }
       </div>
     );
   };
 
   return (
-    <ResponsiveContainer width="100%" height={360}>
-      <ScatterChart margin={{ top: 10, right: 16, bottom: 8, left: 0 }}>
-        <XAxis
-          type="number"
-          dataKey="x"
-          name="PC1"
-          tick={false}
-          axisLine={{ stroke: GRID }}
-          label={{ value: "PC1", position: "insideBottom", fill: AXIS, fontSize: 11 }}
+    <div className="relative">
+      <ResponsiveContainer width="100%" height={360}>
+        <ScatterChart
+          margin={{ top: 10, right: 16, bottom: 8, left: 0 }}
+        >
+          <XAxis
+            type="number"
+            dataKey="x"
+            name="PC1"
+            tick={false}
+            axisLine={{ stroke: GRID }}
+            label={{ value: "PC1", position: "insideBottom", fill: AXIS, fontSize: 11 }}
+          />
+          <YAxis
+            type="number"
+            dataKey="y"
+            name="PC2"
+            tick={false}
+            axisLine={{ stroke: GRID }}
+            label={{ value: "PC2", angle: -90, position: "insideLeft", fill: AXIS, fontSize: 11 }}
+          />
+          <ZAxis range={[40, 40]} />
+          <Tooltip
+            cursor={{ strokeDasharray: "3 3", stroke: GRID }}
+            content={<TipContent />}
+          />
+          <Scatter
+            data={faces}
+            shape={FaceShape}
+            isAnimationActive={false}
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            onClick={(data: any) => {
+              if (data?.visitor_id) setSelected({ kind: "face", pt: data as EmbeddingFacePoint });
+            }}
+          />
+          <Scatter
+            data={centroids}
+            shape={CentroidShape}
+            isAnimationActive={false}
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            onClick={(data: any) => {
+              if (data?.visitor_id) setSelected({ kind: "centroid", pt: data as EmbeddingCentroid });
+            }}
+          />
+        </ScatterChart>
+      </ResponsiveContainer>
+
+      {/* ── Photo popup ── */}
+      {selected && (
+        <FacePopup
+          selected={selected}
+          nameFor={nameFor}
+          colorFor={colorFor}
+          onClose={() => setSelected(null)}
         />
-        <YAxis
-          type="number"
-          dataKey="y"
-          name="PC2"
-          tick={false}
-          axisLine={{ stroke: GRID }}
-          label={{ value: "PC2", angle: -90, position: "insideLeft", fill: AXIS, fontSize: 11 }}
+      )}
+    </div>
+  );
+}
+
+function FacePopup({
+  selected,
+  nameFor,
+  colorFor,
+  onClose,
+}: {
+  selected: SelectedPoint;
+  nameFor: (id: string) => string;
+  colorFor: (id: string) => string;
+  onClose: () => void;
+}) {
+  const vid = selected.pt.visitor_id;
+  const name = nameFor(vid);
+  const color = colorFor(vid);
+
+  const cropUrl =
+    selected.kind === "face" && selected.pt.face_id
+      ? `${API_BASE}/api/visitors/${vid}/faces/${selected.pt.face_id}/crop`
+      : null;
+
+  return (
+    <div
+      className="absolute left-10 top-4 z-20 w-48 rounded-card border border-white/10 bg-surface/95 p-3 shadow-xl backdrop-blur-sm"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {/* Header */}
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span
+            className="h-2.5 w-2.5 shrink-0 rounded-sm"
+            style={{ backgroundColor: color }}
+          />
+          <span className="truncate text-xs font-medium text-text-primary" title={name}>
+            {name}
+          </span>
+        </div>
+        <button
+          onClick={onClose}
+          className="shrink-0 rounded p-0.5 text-text-muted hover:text-text-primary"
+        >
+          ✕
+        </button>
+      </div>
+
+      {/* Photo */}
+      {cropUrl ? (
+        <img
+          src={cropUrl}
+          alt={name}
+          className="h-36 w-full rounded-control object-cover"
+          onError={(e) => {
+            (e.currentTarget as HTMLImageElement).src = "";
+            e.currentTarget.style.display = "none";
+          }}
         />
-        <ZAxis range={[40, 40]} />
-        <Tooltip
-          cursor={{ strokeDasharray: "3 3", stroke: GRID }}
-          content={<TipContent />}
-        />
-        <Scatter data={faces} shape={FaceShape} isAnimationActive={false} />
-        <Scatter data={centroids} shape={CentroidShape} isAnimationActive={false} />
-      </ScatterChart>
-    </ResponsiveContainer>
+      ) : (
+        <div className="flex h-36 items-center justify-center rounded-control bg-white/5 text-xs text-text-muted">
+          {selected.kind === "centroid" ? "Centroid — no single photo" : "No crop available"}
+        </div>
+      )}
+
+      {/* Link to visitor profile */}
+      <Link
+        href={`/visitors/${vid}`}
+        className="mt-2 flex w-full items-center justify-center rounded-control bg-white/5 px-2 py-1 text-[11px] text-text-secondary hover:bg-white/10 hover:text-text-primary"
+      >
+        Open visitor profile →
+      </Link>
+    </div>
   );
 }
 

@@ -264,6 +264,7 @@ export interface EmbeddingCentroid {
 
 export interface EmbeddingFacePoint {
   visitor_id: string;
+  face_id?: string;
   x: number;
   y: number;
 }
