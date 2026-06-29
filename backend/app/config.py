@@ -203,9 +203,9 @@ class Settings(BaseSettings):
     YOLO_PERSON_CONFIDENCE: float = 0.5
 
     INSIGHTFACE_MODEL_NAME: str = "buffalo_l"
-    # ArcFace detector input size. 640 keeps full recall for small/distant
-    # faces; 480/320 are faster for close-up footage.
-    INSIGHTFACE_DET_SIZE: int = 640
+    # ArcFace detector input size. 960 improves recall for small/distant faces
+    # in wide-angle CCTV footage (640 caused misses). 1280 for very wide shots.
+    INSIGHTFACE_DET_SIZE: int = 960
 
 
     # ── Face embedding cache (dHash) ─────────────────────────
@@ -245,8 +245,8 @@ class Settings(BaseSettings):
     # ── Face quality gates (detection) ───────────────────────
     # Faces smaller than this (px, min of width/height) are ignored — too small
     # for a reliable embedding.
-    MIN_FACE_SIZE_PX: int = 40
-    MIN_FACE_DET_SCORE: float = 0.40
+    MIN_FACE_SIZE_PX: int = 25
+    MIN_FACE_DET_SCORE: float = 0.35
     # When the single full-frame ArcFace pass assigns no face to a person box,
     # retry face detection on that person's upscaled crop. This rescues small /
     # partially-occluded faces the full-frame detector missed, but costs one extra
