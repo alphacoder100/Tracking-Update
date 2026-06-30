@@ -15,6 +15,9 @@ python-dotenv>=1.0.0
 
 # ── Computer Vision / ML (CPU) ───────────────────────────────
 # torch / torchvision are installed CPU-only in the Dockerfile.
+# For GPU/CUDA: install torch with `pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118`
+torch>=2.0.0
+torchvision>=0.15.0
 ultralytics>=8.2.0
 insightface>=0.7.3
 onnxruntime>=1.18.0
@@ -23,6 +26,15 @@ onnx>=1.16.0
 opencv-python-headless>=4.9.0
 numpy>=1.26.0
 Pillow>=10.0
+
+# ── Face Recognition Models ──────────────────────────────────
+# For model loading and benchmarking (buffalo_l/s/m and future AdaFace support).
+timm>=1.0.0                  # PyTorch Image Models for backbone architectures
+transformers>=4.30.0         # HuggingFace transformers for pretrained model weights
+huggingface-hub>=0.16.0      # Download models from HuggingFace Hub
+# Optional: To use real AdaFace (1.9% EER vs 2.3% buffalo_l), download from:
+# https://github.com/naver/adaface/releases/download/v1.0/adaface_ir50_ms1mv2.ckpt
+
 # Bundles a modern FFmpeg (7.x) used by the native RTSP client to decode H.264
 # for cameras that require SHA-256 digest auth (OpenCV's FFmpeg can't). See
 # app/services/rtsp_native.py.

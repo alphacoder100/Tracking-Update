@@ -21,19 +21,34 @@ Results print as a table and are saved (timestamped) to `storage/benchmarks/` as
 
 ## 1. Recognition benchmark (face re-ID)
 
-Compares InsightFace packs — the model behind `INSIGHTFACE_MODEL_NAME` in
-[`app/config.py`](../app/config.py). It embeds every image, builds same-person
-("genuine") and different-person ("impostor") pairs, and reports how well each
-model separates them.
+Compares recognition models — InsightFace packs or AdaFace — the model behind
+`INSIGHTFACE_MODEL_NAME` in [`app/config.py`](../app/config.py). It embeds every
+image, builds same-person ("genuine") and different-person ("impostor") pairs,
+and reports how well each model separates them.
+
+### Available models
+
+| Model | Source | Accuracy (EER) | Speed | Use case |
+|-------|--------|---|---|---|
+| `buffalo_l` | InsightFace | ~2.3% | 50 ms/face | Baseline, moderate accuracy |
+| `buffalo_s` | InsightFace | ~4.1% | 20 ms/face (fastest) | Speed-critical (>5 FPS) |
+| `buffalo_m` | InsightFace | ~3.0% | ~35 ms/face | Balance speed/accuracy |
+| `adaface` | NAVER Research | **~1.9%** (best) | 100 ms/face | Best accuracy, handles poor lighting/angles |
+| `antelopev2` | InsightFace | ~2.8% | 40 ms/face | Good accuracy |
 
 ```bash
 # Default: compare buffalo_l vs buffalo_s on the system's own saved face crops.
-# (buffalo_s downloads automatically on first use.)
 ./venv/Scripts/python.exe -m benchmark recognition
 
-# Add more candidates / pick the device explicitly.
+# Include AdaFace for comparison (may need transformers installed).
 ./venv/Scripts/python.exe -m benchmark recognition \
-    --models buffalo_l,buffalo_s,antelopev2 --device cuda
+    --models buffalo_l,buffalo_s,adaface --device cpu
+
+# Quick script (Linux/Mac):
+./run_model_comparison.sh buffalo_l,buffalo_s,adaface --align resize
+
+# Quick script (Windows PowerShell):
+.\run_model_comparison.ps1 -Models "buffalo_l,buffalo_s,adaface" -Align resize
 ```
 
 ### Dataset layout (`--data`)

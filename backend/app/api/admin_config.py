@@ -271,6 +271,8 @@ _KNOWN_YOLO = [
     "yolo11n.pt", "yolo11s.pt", "yolo11m.pt",
 ]
 _KNOWN_INSIGHTFACE = ["buffalo_l", "buffalo_m", "buffalo_s", "buffalo_sc", "antelopev2"]
+_KNOWN_ADAFACE = ["adaface"]
+_KNOWN_RECOGNITION = _KNOWN_INSIGHTFACE + _KNOWN_ADAFACE
 
 
 def _local_yolo_weights() -> List[str]:
@@ -304,7 +306,7 @@ async def _models_payload(db: AsyncSession) -> Dict[str, Any]:
         "yolo_model": settings.YOLO_MODEL_PATH,
         "insightface_model": settings.INSIGHTFACE_MODEL_NAME,
         "yolo_options": _yolo_choices(),
-        "insightface_options": _KNOWN_INSIGHTFACE,
+        "insightface_options": _KNOWN_RECOGNITION,
         "device": mgr.device,
         "models_loaded": mgr.is_loaded,
         "gallery_visitor_count": visitors,
@@ -344,10 +346,10 @@ class ModelPatch(BaseModel):
             raise ValueError("Provide yolo_model and/or insightface_model.")
         if (
             self.insightface_model is not None
-            and self.insightface_model not in _KNOWN_INSIGHTFACE
+            and self.insightface_model not in _KNOWN_RECOGNITION
         ):
             raise ValueError(
-                f"insightface_model must be one of {_KNOWN_INSIGHTFACE}"
+                f"insightface_model must be one of {_KNOWN_RECOGNITION}"
             )
         return self
 
@@ -465,7 +467,7 @@ class BenchmarkRunRequest(BaseModel):
             raise ValueError("Only kind='recognition' can be evaluated on live data.")
         if not self.models:
             raise ValueError("Provide at least one model to evaluate.")
-        bad = [m for m in self.models if m not in _KNOWN_INSIGHTFACE]
+        bad = [m for m in self.models if m not in _KNOWN_RECOGNITION]
         if bad:
             raise ValueError(f"Unknown recognition model(s): {bad}")
         if self.align not in ("resize", "detect"):
@@ -541,7 +543,7 @@ async def benchmark_leaderboard(
         r["is_best"] = r["model"] == best
         r.pop("_score", None)
 
-    options = _KNOWN_INSIGHTFACE if kind == "recognition" else _yolo_choices()
+    options = _KNOWN_RECOGNITION if kind == "recognition" else _yolo_choices()
     return {
         "kind": kind,
         "active_model": active,
