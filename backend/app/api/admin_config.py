@@ -12,10 +12,12 @@ new value immediately.
 
 import json
 import logging
+import os
+import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Security
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Security, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, field_validator, model_validator
 from sqlalchemy import text
@@ -550,6 +552,108 @@ async def benchmark_leaderboard(
         "best_model": best,
         "models": rows,
         "all_candidates": options,
+    }
+
+
+# ── Video benchmark (upload a clip → score all models on it) ──
+#
+# Runs detection + recognition models on the frames of an uploaded video, on CPU
+# and/or GPU, recording speed + resource cost + self-consistency quality. Heavy and
+# multi-pass, so it runs in an isolated subprocess (the live model is untouched).
+
+_VIDEO_BENCH_DIR = Path("storage") / "benchmark_videos"
+_VALID_DEVICES = {"cpu", "cuda"}
+
+
+@router.post("/benchmarks/video/run")
+async def run_video_benchmark(
+    file: UploadFile = File(...),
+    detection_models: str = Form(""),
+    recognition_models: str = Form(""),
+    devices: str = Form("cpu"),
+    max_frames: int = Form(150),
+    _key: str = Security(verify_admin_api_key),
+):
+    """Upload a video and benchmark detection + recognition models on it."""
+    from app.services.video_benchmark_runner import VideoBenchmarkRunner
+    from app.utils import is_video_upload
+
+    runner = VideoBenchmarkRunner.get_instance()
+    if runner.is_running:
+        raise HTTPException(status_code=409, detail="A video benchmark is already running.")
+
+    if not is_video_upload(file.filename, file.content_type):
+        raise HTTPException(status_code=400, detail="File does not look like a video.")
+
+    # Parse + validate model lists and devices.
+    det = [m.strip() for m in detection_models.split(",") if m.strip()]
+    rec = [m.strip() for m in recognition_models.split(",") if m.strip()]
+    devs = [d.strip().lower() for d in devices.split(",") if d.strip()]
+    devs = ["cuda" if d == "gpu" else d for d in devs]
+
+    if not det and not rec:
+        raise HTTPException(status_code=400, detail="Select at least one detection or recognition model.")
+    bad_yolo = [m for m in det if m not in set(_yolo_choices())]
+    if bad_yolo:
+        raise HTTPException(status_code=400, detail=f"Unknown detection model(s): {bad_yolo}")
+    bad_rec = [m for m in rec if m not in _KNOWN_RECOGNITION]
+    if bad_rec:
+        raise HTTPException(status_code=400, detail=f"Unknown recognition model(s): {bad_rec}")
+    bad_dev = [d for d in devs if d not in _VALID_DEVICES]
+    if bad_dev:
+        raise HTTPException(status_code=400, detail=f"Devices must be cpu/cuda; got {bad_dev}")
+    if not devs:
+        devs = ["cpu"]
+
+    # Drop cuda if no GPU is actually present, so the run doesn't silently fall back.
+    from app.ml_models import cuda_available
+    if "cuda" in devs and not cuda_available():
+        devs = [d for d in devs if d != "cuda"] or ["cpu"]
+
+    max_frames = max(10, min(int(max_frames), 600))
+
+    # Persist the upload.
+    contents = await file.read()
+    max_bytes = settings.VIDEO_MAX_SIZE_MB * 1024 * 1024
+    if len(contents) > max_bytes:
+        raise HTTPException(status_code=413, detail=f"Video exceeds the {settings.VIDEO_MAX_SIZE_MB} MB limit.")
+    _VIDEO_BENCH_DIR.mkdir(parents=True, exist_ok=True)
+    suffix = os.path.splitext(file.filename or "")[1].lower() or ".mp4"
+    fd, path = tempfile.mkstemp(suffix=suffix, dir=str(_VIDEO_BENCH_DIR))
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(contents)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Could not save upload: {exc}")
+
+    try:
+        await runner.start(path, det, rec, devs, max_frames=max_frames)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    return runner.status()
+
+
+@router.get("/benchmarks/video/run")
+async def video_benchmark_status(_key: str = Security(verify_admin_api_key)):
+    """Current video-benchmark run status + rolling log tail (poll while running)."""
+    from app.services.video_benchmark_runner import VideoBenchmarkRunner
+
+    return VideoBenchmarkRunner.get_instance().status()
+
+
+@router.get("/benchmarks/video/options")
+async def video_benchmark_options(_key: str = Security(verify_admin_api_key)):
+    """Available models + device capability for the video-benchmark UI."""
+    from app.ml_models import cuda_available
+    from benchmark.resources import gpu_name
+
+    return {
+        "detection_models": _yolo_choices(),
+        "recognition_models": _KNOWN_RECOGNITION,
+        "active_yolo": settings.YOLO_MODEL_PATH,
+        "active_recognition": settings.INSIGHTFACE_MODEL_NAME,
+        "cuda_available": cuda_available(),
+        "gpu_name": gpu_name() if cuda_available() else None,
     }
 
 

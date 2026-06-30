@@ -40,5 +40,10 @@ huggingface-hub>=0.16.0      # Download models from HuggingFace Hub
 # app/services/rtsp_native.py.
 imageio-ffmpeg>=0.5.1
 
+# ── Benchmark resource monitoring (CPU/RAM + NVIDIA GPU/VRAM) ─
+# Used by the video benchmark to record what each model+device combo costs.
+psutil>=5.9.0                # CPU% + RAM sampling
+nvidia-ml-py>=12.0.0         # pynvml: GPU utilisation + VRAM (NVIDIA only)
+
 # ── HTTP client ───────────────────────────────────────────
 httpx>=0.24.0

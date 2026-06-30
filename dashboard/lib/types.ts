@@ -332,7 +332,7 @@ export type BenchmarkResult = Record<string, number | string | boolean | null | 
 // Summary of a saved benchmark run (from GET /api/admin/benchmarks).
 export interface BenchmarkSummary {
   name: string;
-  kind: "recognition" | "detection";
+  kind: "recognition" | "detection" | "video";
   generated_at: string;
   meta: Record<string, number | string | boolean>;
   model_count: number;
@@ -375,6 +375,101 @@ export interface Leaderboard {
   best_model: string | null;
   models: LeaderboardEntry[];
   all_candidates: string[];
+}
+
+// ── Video benchmark (upload a clip → score all models) ───────
+
+// Options for the video-benchmark UI (from GET /api/admin/benchmarks/video/options).
+export interface VideoBenchmarkOptions {
+  detection_models: string[];
+  recognition_models: string[];
+  active_yolo: string;
+  active_recognition: string;
+  cuda_available: boolean;
+  gpu_name: string | null;
+}
+
+// One detection-model row in a video benchmark report.
+export interface VideoDetectionRow {
+  model: string;
+  device: string;
+  frames?: number;
+  detections?: number;
+  det_per_frame?: number;
+  mean_conf?: number;
+  ms_mean?: number;
+  fps?: number;
+  cpu_pct_mean?: number;
+  cpu_pct_peak?: number;
+  ram_mb_mean?: number;
+  ram_mb_peak?: number;
+  gpu_pct_mean?: number | null;
+  gpu_pct_peak?: number | null;
+  vram_mb_mean?: number | null;
+  vram_mb_peak?: number | null;
+  error?: string;
+}
+
+// One recognition-model row in a video benchmark report.
+export interface VideoRecognitionRow {
+  model: string;
+  device: string;
+  faces?: number;
+  dim?: number;
+  ms_mean?: number;
+  fps?: number;
+  tracks?: number;
+  tracks_multi?: number;
+  intra_sim?: number;
+  inter_sim?: number;
+  margin?: number;
+  dup_rate?: number;
+  genuine_pairs?: number;
+  impostor_pairs?: number;
+  cpu_pct_mean?: number;
+  cpu_pct_peak?: number;
+  ram_mb_mean?: number;
+  ram_mb_peak?: number;
+  gpu_pct_mean?: number | null;
+  gpu_pct_peak?: number | null;
+  vram_mb_mean?: number | null;
+  vram_mb_peak?: number | null;
+  error?: string;
+}
+
+export interface VideoBenchmarkReport {
+  kind: "video";
+  generated_at: string;
+  meta: {
+    video: string;
+    frames_sampled: number;
+    frame_stride: number;
+    total_frames: number;
+    duration_s: number;
+    resolution: string;
+    video_fps: number;
+    devices: string[];
+    cpu_name: string | null;
+    gpu_name: string | null;
+    conf: number;
+    imgsz: number;
+  };
+  detection: VideoDetectionRow[];
+  recognition: VideoRecognitionRow[];
+}
+
+// Live video-benchmark run status (from GET/POST /api/admin/benchmarks/video/run).
+export interface VideoBenchmarkRunStatus {
+  status: "idle" | "running" | "done" | "error";
+  video: string | null;
+  detection_models: string[];
+  recognition_models: string[];
+  devices: string[];
+  started_at: string | null;
+  finished_at: string | null;
+  report: string | null;
+  error: string | null;
+  log: string[];
 }
 
 export interface VideoStreamResponse {

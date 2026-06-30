@@ -100,6 +100,52 @@ def _print_recommendation(rows: list[dict]) -> None:
     )
 
 
+def cmd_video(args: argparse.Namespace) -> int:
+    """Benchmark detection + recognition models on an uploaded video."""
+    import json
+    from datetime import datetime, timezone
+
+    from .common import resolve_device
+    from .video import run_video_benchmark
+
+    det_models = _csv_list(args.detection_models) if args.detection_models else []
+    rec_models = _csv_list(args.recognition_models) if args.recognition_models else []
+
+    # Resolve requested devices, dropping cuda if unavailable (and de-duping).
+    requested = _csv_list(args.devices)
+    devices: list[str] = []
+    for d in requested:
+        rd = resolve_device(d)
+        if rd not in devices:
+            devices.append(rd)
+    if not devices:
+        devices = ["cpu"]
+
+    print(
+        f"Video benchmark · video={args.video} · devices={devices}\n"
+        f"  detection={det_models or '—'}\n  recognition={rec_models or '—'}"
+    )
+
+    report = run_video_benchmark(
+        video_path=args.video,
+        detection_models=det_models,
+        recognition_models=rec_models,
+        devices=devices,
+        max_frames=args.max_frames,
+        conf=args.conf,
+        imgsz=args.imgsz,
+    )
+
+    out_dir = Path(args.out)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    report["generated_at"] = stamp
+    out_path = out_dir / f"video-{stamp}.json"
+    out_path.write_text(json.dumps(report, indent=2, default=str))
+    print(f"\nSaved: {out_path}")
+    return 0
+
+
 def cmd_detection(args: argparse.Namespace) -> int:
     from .datasets import load_detection_dataset
     from .detection import run_detection_benchmark
@@ -240,6 +286,20 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--seed", type=int, default=42)
     r.add_argument("--out", default=str(DEFAULT_OUT_DIR))
     r.set_defaults(func=cmd_recognition)
+
+    # ── video ──
+    v = sub.add_parser("video", help="benchmark detection + recognition on an uploaded video")
+    v.add_argument("--video", required=True, help="path to the uploaded video file")
+    v.add_argument("--detection-models", default="yolov8n.pt,yolov8s.pt", dest="detection_models",
+                   help="comma-separated YOLO weights (empty to skip detection)")
+    v.add_argument("--recognition-models", default="buffalo_l,buffalo_s", dest="recognition_models",
+                   help="comma-separated recognition models (empty to skip recognition)")
+    v.add_argument("--devices", default="cpu", help="comma-separated devices: cpu,cuda")
+    v.add_argument("--max-frames", type=int, default=150, dest="max_frames")
+    v.add_argument("--conf", type=float, default=0.25)
+    v.add_argument("--imgsz", type=int, default=640)
+    v.add_argument("--out", default=str(DEFAULT_OUT_DIR))
+    v.set_defaults(func=cmd_video)
 
     # ── detection ──
     d = sub.add_parser("detection", help="compare person-detection (YOLO) models")

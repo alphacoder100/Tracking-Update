@@ -1,129 +1,164 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import {
-  Activity,
-  CheckCircle2,
   Cpu,
+  FileVideo,
   FlaskConical,
   Gauge,
   Loader2,
   Play,
   ScanFace,
+  Server,
   Trophy,
+  Upload,
   XCircle,
   Zap,
 } from "lucide-react";
 
 import { api, fetcher } from "@/lib/api";
 import type {
-  BenchmarkRunStatus,
-  Leaderboard,
-  LeaderboardEntry,
-  ModelStatus,
+  BenchmarkSummary,
+  VideoBenchmarkOptions,
+  VideoBenchmarkReport,
+  VideoBenchmarkRunStatus,
+  VideoDetectionRow,
+  VideoRecognitionRow,
 } from "@/lib/types";
 import {
   Badge,
   Button,
   Card,
   CardTitle,
-  ErrorState,
+  EmptyState,
+  Input,
   PageHeader,
-  Select,
   Skeleton,
 } from "@/components/ui";
 
-const KIND = "recognition";
-const LB_KEY = `admin/benchmarks/leaderboard?kind=${KIND}`;
-const RUN_KEY = "admin/benchmarks/run";
+const OPTIONS_KEY = "admin/benchmarks/video/options";
+const RUN_KEY = "admin/benchmarks/video/run";
+const LIST_KEY = "admin/benchmarks";
 
-const pctOf = (v: unknown) =>
-  typeof v === "number" ? `${(v * 100).toFixed(1)}%` : "—";
-const fix = (d: number) => (v: unknown) =>
+const num = (d: number) => (v: unknown) =>
   typeof v === "number" ? v.toFixed(d) : "—";
+const pct = (v: unknown) => (typeof v === "number" ? `${(v * 100).toFixed(1)}%` : "—");
+const orNA = (v: unknown, d = 0) =>
+  v === null || v === undefined ? "N/A" : typeof v === "number" ? v.toFixed(d) : String(v);
 
-export default function ModelArenaPage() {
+type Dir = "min" | "max";
+type Col<T> = {
+  key: keyof T;
+  label: string;
+  fmt: (v: unknown) => string;
+  best?: Dir; // if set, best value across rows is highlighted
+  hint?: string;
+};
+
+// ── Column definitions ───────────────────────────────────────
+
+const DETECTION_COLS: Col<VideoDetectionRow>[] = [
+  { key: "det_per_frame", label: "Det/frame", fmt: num(2) },
+  { key: "mean_conf", label: "Conf", fmt: num(3), best: "max" },
+  { key: "ms_mean", label: "ms/frame", fmt: num(1), best: "min" },
+  { key: "fps", label: "FPS", fmt: num(1), best: "max" },
+  { key: "cpu_pct_mean", label: "CPU%", fmt: num(0) },
+  { key: "ram_mb_mean", label: "RAM MB", fmt: num(0) },
+  { key: "gpu_pct_mean", label: "GPU%", fmt: (v) => orNA(v, 0) },
+  { key: "vram_mb_mean", label: "VRAM MB", fmt: (v) => orNA(v, 0) },
+];
+
+const RECOGNITION_COLS: Col<VideoRecognitionRow>[] = [
+  { key: "margin", label: "Margin", fmt: num(3), best: "max", hint: "intra − inter similarity (higher = better discrimination)" },
+  { key: "intra_sim", label: "Intra sim", fmt: num(3), best: "max", hint: "same-person similarity (higher better)" },
+  { key: "inter_sim", label: "Inter sim", fmt: num(3), best: "min", hint: "different-person similarity (lower better)" },
+  { key: "dup_rate", label: "Dup rate", fmt: pct, best: "min", hint: "different people falsely too-similar (lower better)" },
+  { key: "tracks", label: "Tracks", fmt: num(0) },
+  { key: "ms_mean", label: "ms/face", fmt: num(1), best: "min" },
+  { key: "fps", label: "FPS", fmt: num(1), best: "max" },
+  { key: "cpu_pct_mean", label: "CPU%", fmt: num(0) },
+  { key: "ram_mb_mean", label: "RAM MB", fmt: num(0) },
+  { key: "gpu_pct_mean", label: "GPU%", fmt: (v) => orNA(v, 0) },
+  { key: "vram_mb_mean", label: "VRAM MB", fmt: (v) => orNA(v, 0) },
+];
+
+export default function BenchmarkPage() {
   const { mutate } = useSWRConfig();
-  const [align, setAlign] = useState<"resize" | "detect">("resize");
-  const [busy, setBusy] = useState<string | null>(null);
-
-  const { data: models } = useSWR<ModelStatus>("admin/models", fetcher);
-  const { data: lb, error: lbError } = useSWR<Leaderboard>(LB_KEY, fetcher);
-  // Poll the run status only while a run is active.
-  const { data: run } = useSWR<BenchmarkRunStatus>(RUN_KEY, fetcher, {
+  const { data: options } = useSWR<VideoBenchmarkOptions>(OPTIONS_KEY, fetcher);
+  const { data: run } = useSWR<VideoBenchmarkRunStatus>(RUN_KEY, fetcher, {
     refreshInterval: (latest) => (latest?.status === "running" ? 1500 : 0),
   });
+  const { data: list } = useSWR<BenchmarkSummary[]>(LIST_KEY, fetcher);
+
+  // Config state
+  const [file, setFile] = useState<File | null>(null);
+  const [detModels, setDetModels] = useState<string[]>([]);
+  const [recModels, setRecModels] = useState<string[]>([]);
+  const [devices, setDevices] = useState<string[]>(["cpu"]);
+  const [maxFrames, setMaxFrames] = useState(120);
+  const [uploading, setUploading] = useState(false);
 
   const running = run?.status === "running";
 
-  // When a run finishes, refresh the leaderboard so new scores appear + stored.
-  const lastStatus = run?.status;
+  // Default model selections once options load.
   useEffect(() => {
-    if (lastStatus === "done" || lastStatus === "error") {
-      void mutate(LB_KEY);
-      void mutate("admin/models");
-    }
-  }, [lastStatus, mutate]);
+    if (!options) return;
+    setDetModels((prev) =>
+      prev.length ? prev : options.detection_models.slice(0, 3),
+    );
+    setRecModels((prev) =>
+      prev.length ? prev : options.recognition_models.slice(0, 3),
+    );
+    if (options.cuda_available) setDevices((prev) => prev);
+  }, [options]);
 
-  const evaluated = useMemo(
-    () => new Map((lb?.models ?? []).map((m) => [m.model, m])),
-    [lb],
+  // Newest saved video report → load it for the tables.
+  const latestVideoReport = useMemo(() => {
+    const fromRun = run?.status === "done" ? run.report : null;
+    if (fromRun) return fromRun;
+    const videos = (list ?? []).filter((b) => b.kind === "video");
+    return videos.length ? videos[0].name : null;
+  }, [run, list]);
+
+  const { data: report } = useSWR<VideoBenchmarkReport>(
+    latestVideoReport ? `admin/benchmarks/${latestVideoReport}` : null,
+    fetcher,
   );
 
-  // Rows: evaluated models first (best→worst), then not-yet-evaluated candidates.
-  const unevaluated = (lb?.all_candidates ?? []).filter((c) => !evaluated.has(c));
-  const activeEntry = lb?.models.find((m) => m.is_active) ?? null;
-  const bestEntry = lb?.models.find((m) => m.is_best) ?? null;
+  // Refresh the report list when a run finishes.
+  const lastStatus = run?.status;
+  useEffect(() => {
+    if (lastStatus === "done") void mutate(LIST_KEY);
+  }, [lastStatus, mutate]);
 
-  async function evaluate(modelList: string[]) {
-    setBusy(modelList.join(","));
-    try {
-      await api.post(RUN_KEY, { kind: KIND, models: modelList, align, device: "cpu" });
-      await mutate(RUN_KEY); // kick the poller immediately
-    } catch (e) {
-      alert(`Could not start evaluation: ${(e as Error).message}`);
-    } finally {
-      setBusy(null);
-    }
+  function toggle(list: string[], v: string): string[] {
+    return list.includes(v) ? list.filter((x) => x !== v) : [...list, v];
   }
 
-  async function useModel(model: string) {
-    if (model === lb?.active_model) return;
-    const faces = models?.gallery_face_count ?? 0;
-    const ok = window.confirm(
-      `Switch the LIVE recognition model to "${model}"?\n\n` +
-        `This changes the embedding space, so the existing ${faces} gallery ` +
-        `face(s) must be re-enrolled before returning visitors match again.\n\nProceed?`,
-    );
-    if (!ok) return;
-    setBusy(`use:${model}`);
-    try {
-      await api.post("admin/models", {
-        insightface_model: model,
-        confirm_recognition_change: true,
-      });
-      await Promise.all([mutate("admin/models"), mutate(LB_KEY), mutate("health")]);
-      alert(`Now serving ${model}. Rebuild/re-enroll the gallery to restore matching.`);
-    } catch (e) {
-      alert(`Switch failed: ${(e as Error).message}`);
-    } finally {
-      setBusy(null);
+  async function runBenchmark() {
+    if (!file) {
+      alert("Choose a video file first.");
+      return;
     }
-  }
-
-  async function applyThreshold(value: number) {
-    setBusy("threshold");
+    if (detModels.length === 0 && recModels.length === 0) {
+      alert("Select at least one detection or recognition model.");
+      return;
+    }
+    setUploading(true);
     try {
-      await api.patch("admin/settings", {
-        updates: { RETURNING_FACE_THRESHOLD: Number(value.toFixed(3)) },
-      });
-      await mutate("admin/settings");
-      alert(`Applied RETURNING_FACE_THRESHOLD = ${value.toFixed(3)}.`);
+      const form = new FormData();
+      form.append("file", file);
+      form.append("detection_models", detModels.join(","));
+      form.append("recognition_models", recModels.join(","));
+      form.append("devices", devices.join(","));
+      form.append("max_frames", String(maxFrames));
+      await api.upload(RUN_KEY, form);
+      await mutate(RUN_KEY);
     } catch (e) {
-      alert(`Failed: ${(e as Error).message}`);
+      alert(`Could not start benchmark: ${(e as Error).message}`);
     } finally {
-      setBusy(null);
+      setUploading(false);
     }
   }
 
@@ -131,320 +166,465 @@ export default function ModelArenaPage() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Model selection"
-        title="Model Arena"
-        subtitle="Score recognition models on your own live gallery, one by one. Results are stored automatically and the best is surfaced — switch to it with one click."
+        title="Video Benchmark"
+        subtitle="Upload a clip and score every detection + recognition model on it — speed, CPU/GPU cost, and recognition quality — all measured on your own footage and laid out side by side."
         icon={<FlaskConical className="h-5 w-5" />}
-        action={
-          <div className="flex items-center gap-2">
-            <div className="w-40">
-              <Select
-                value={align}
-                onChange={(v) => setAlign(v as "resize" | "detect")}
-                options={[
-                  { value: "resize", label: "Fast (resize)" },
-                  { value: "detect", label: "Realistic (detect)" },
-                ]}
-              />
-            </div>
-            <Button
-              disabled={running || !lb}
-              onClick={() => evaluate(lb?.all_candidates ?? [])}
-            >
-              {running ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Play className="h-4 w-4" />
-              )}
-              Evaluate all
-            </Button>
-          </div>
-        }
       />
 
-      {/* ── Run progress ── */}
-      {run && run.status !== "idle" && (
-        <RunBanner run={run} />
-      )}
+      {/* ── Configuration ── */}
+      <Card>
+        <CardTitle icon={<Upload className="h-4 w-4" />}>
+          Configure run
+        </CardTitle>
+        {!options ? (
+          <Skeleton className="h-48" />
+        ) : (
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.1fr_1fr]">
+            {/* Left: upload + devices + frames */}
+            <div className="space-y-4">
+              <Dropzone file={file} onFile={setFile} disabled={running} />
 
-      {lbError ? (
-        <ErrorState message="Could not load the leaderboard. Is ADMIN_API_KEY configured?" />
-      ) : !lb || !models ? (
-        <Skeleton className="h-40" />
-      ) : (
-        <>
-          {/* ── Current model scorecard ── */}
-          <Card>
-            <CardTitle icon={<ScanFace className="h-4 w-4" />}>
-              Current Model
-            </CardTitle>
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.4fr_1fr]">
               <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xl font-semibold text-text-primary">
-                    {lb.active_model}
-                  </span>
-                  <Badge tone="primary">recognition · live</Badge>
-                  {bestEntry && bestEntry.model === lb.active_model && (
-                    <Badge tone="success">
-                      <Trophy className="h-3 w-3" /> best
-                    </Badge>
-                  )}
+                <Label>Devices</Label>
+                <div className="flex gap-2">
+                  <Chip
+                    active={devices.includes("cpu")}
+                    onClick={() => setDevices((d) => toggle(d, "cpu"))}
+                    disabled={running}
+                    icon={<Cpu className="h-3.5 w-3.5" />}
+                  >
+                    CPU
+                  </Chip>
+                  <Chip
+                    active={devices.includes("cuda")}
+                    onClick={() => setDevices((d) => toggle(d, "cuda"))}
+                    disabled={running || !options.cuda_available}
+                    icon={<Server className="h-3.5 w-3.5" />}
+                  >
+                    GPU{options.gpu_name ? ` · ${shortGpu(options.gpu_name)}` : ""}
+                  </Chip>
                 </div>
-                <p className="mt-1 text-xs text-text-muted">
-                  Detector: {models.yolo_model} · device {models.device} ·{" "}
-                  {models.gallery_face_count} gallery faces / {models.gallery_visitor_count}{" "}
-                  visitors
-                </p>
-                {activeEntry ? (
-                  <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                    <Metric label="AUC" value={fix(4)(activeEntry.auc)} tone="primary" />
-                    <Metric label="EER" value={pctOf(activeEntry.eer)} />
-                    <Metric label="Rec. threshold" value={fix(3)(activeEntry.best_threshold)} />
-                    <Metric label="ms / face" value={fix(2)(activeEntry.embed_ms_mean)} />
-                  </div>
-                ) : (
-                  <p className="mt-4 text-sm text-text-secondary">
-                    Not scored yet — click{" "}
-                    <span className="text-text-primary">Evaluate</span> on{" "}
-                    {lb.active_model} below to measure it on your live gallery.
+                {!options.cuda_available && (
+                  <p className="mt-1 text-[11px] text-text-muted">
+                    No CUDA GPU detected — CPU only.
                   </p>
                 )}
               </div>
 
-              {/* Best-model callout */}
-              {bestEntry && (
-                <div className="rounded-card border border-success/25 bg-success/5 p-4">
-                  <p className="flex items-center gap-1.5 text-xs font-medium text-success">
-                    <Trophy className="h-3.5 w-3.5" /> Best so far
-                  </p>
-                  <p className="mt-1 text-lg font-semibold text-text-primary">
-                    {bestEntry.model}
-                  </p>
-                  <p className="text-xs text-text-muted">
-                    AUC {fix(4)(bestEntry.auc)} · EER {pctOf(bestEntry.eer)} ·{" "}
-                    {fix(2)(bestEntry.embed_ms_mean)} ms/face
-                  </p>
-                  {bestEntry.model !== lb.active_model && (
-                    <Button
-                      size="sm"
-                      className="mt-3"
-                      disabled={busy !== null || running}
-                      onClick={() => useModel(bestEntry.model)}
-                    >
-                      <Zap className="h-3.5 w-3.5" /> Use best model
-                    </Button>
-                  )}
-                </div>
-              )}
-            </div>
-          </Card>
-
-          {/* ── Leaderboard ── */}
-          <Card>
-            <CardTitle icon={<Trophy className="h-4 w-4" />}>
-              Leaderboard · recognition accuracy on live data
-            </CardTitle>
-            {lb.models.length === 0 && unevaluated.length === 0 ? (
-              <p className="py-6 text-center text-sm text-text-secondary">
-                No candidate models configured.
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {lb.models.map((m, i) => (
-                  <ModelRow
-                    key={m.model}
-                    rank={i + 1}
-                    entry={m}
-                    active={m.is_active}
-                    busy={busy}
-                    running={running}
-                    onEvaluate={() => evaluate([m.model])}
-                    onUse={() => useModel(m.model)}
-                    onApply={() => applyThreshold(Number(m.best_threshold))}
-                  />
-                ))}
-                {unevaluated.map((model) => (
-                  <ModelRow
-                    key={model}
-                    entry={{ model } as LeaderboardEntry}
-                    active={model === lb.active_model}
-                    unevaluated
-                    busy={busy}
-                    running={running}
-                    onEvaluate={() => evaluate([model])}
-                    onUse={() => useModel(model)}
-                  />
-                ))}
+              <div className="max-w-[12rem]">
+                <Label>Max frames sampled</Label>
+                <Input
+                  type="number"
+                  value={maxFrames}
+                  onChange={(v) => setMaxFrames(Math.max(10, Math.min(600, Number(v) || 0)))}
+                  min={10}
+                  max={600}
+                />
               </div>
-            )}
-            <p className="mt-4 text-xs text-text-muted">
-              Accuracy is measured against your accumulated gallery crops
-              (storage/visitor_photos). Those identities were grouped by the
-              current model, so absolute scores are optimistic for it — the ranking
-              between candidates is the reliable signal. “Realistic (detect)” mode
-              adds face alignment for production-like numbers.
-            </p>
-          </Card>
+            </div>
+
+            {/* Right: model selection */}
+            <div className="space-y-4">
+              <div>
+                <Label>Detection models (YOLO)</Label>
+                <div className="flex flex-wrap gap-2">
+                  {options.detection_models.map((m) => (
+                    <Chip
+                      key={m}
+                      active={detModels.includes(m)}
+                      onClick={() => setDetModels((l) => toggle(l, m))}
+                      disabled={running}
+                    >
+                      {m}
+                      {m === options.active_yolo && <Dot />}
+                    </Chip>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <Label>Recognition models</Label>
+                <div className="flex flex-wrap gap-2">
+                  {options.recognition_models.map((m) => (
+                    <Chip
+                      key={m}
+                      active={recModels.includes(m)}
+                      onClick={() => setRecModels((l) => toggle(l, m))}
+                      disabled={running}
+                    >
+                      {m}
+                      {m === options.active_recognition && <Dot />}
+                    </Chip>
+                  ))}
+                </div>
+                <p className="mt-1.5 text-[11px] text-text-muted">
+                  <Dot /> = currently live. Recognition models embed the SAME tracked
+                  faces, so the comparison is fair.
+                </p>
+              </div>
+
+              <Button
+                disabled={running || uploading || !file}
+                onClick={runBenchmark}
+                className="w-full"
+              >
+                {running || uploading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Play className="h-4 w-4" />
+                )}
+                {running ? "Benchmark running…" : uploading ? "Uploading…" : "Run benchmark"}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Card>
+
+      {/* ── Run progress ── */}
+      {run && run.status !== "idle" && <RunBanner run={run} />}
+
+      {/* ── Results ── */}
+      {report ? (
+        <>
+          <ReportMeta report={report} />
+          {report.detection.length > 0 && (
+            <ResultsTable<VideoDetectionRow>
+              title="Detection models"
+              icon={<ScanFace className="h-4 w-4" />}
+              rows={report.detection}
+              cols={DETECTION_COLS}
+            />
+          )}
+          {report.recognition.length > 0 && (
+            <ResultsTable<VideoRecognitionRow>
+              title="Recognition models"
+              icon={<Trophy className="h-4 w-4" />}
+              rows={report.recognition}
+              cols={RECOGNITION_COLS}
+            />
+          )}
         </>
+      ) : run?.status === "running" ? (
+        <Card>
+          <Skeleton className="h-40" />
+        </Card>
+      ) : (
+        <EmptyState
+          icon={<FileVideo className="h-8 w-8" />}
+          message="No video benchmark yet. Upload a clip and run one to see the comparison tables."
+        />
       )}
     </div>
   );
 }
 
-function Metric({
-  label,
-  value,
-  tone = "default",
-}: {
-  label: string;
-  value: string;
-  tone?: "default" | "primary";
-}) {
+// ── Sub-components ───────────────────────────────────────────
+
+function Label({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-control border border-white/5 bg-white/5 px-3 py-2">
-      <p className="text-[11px] text-text-muted">{label}</p>
-      <p
-        className={`tnum text-lg font-semibold ${
-          tone === "primary" ? "text-primary-bright" : "text-text-primary"
-        }`}
-      >
-        {value}
-      </p>
-    </div>
+    <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-text-muted">
+      {children}
+    </p>
   );
 }
 
-function ModelRow({
-  entry,
-  rank,
+function Dot() {
+  return <span className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-primary-bright align-middle" />;
+}
+
+function shortGpu(name: string): string {
+  return name.replace(/NVIDIA GeForce /i, "").replace(/NVIDIA /i, "");
+}
+
+function Chip({
+  children,
   active,
-  unevaluated = false,
-  busy,
-  running,
-  onEvaluate,
-  onUse,
-  onApply,
+  onClick,
+  disabled,
+  icon,
 }: {
-  entry: LeaderboardEntry;
-  rank?: number;
+  children: React.ReactNode;
   active: boolean;
-  unevaluated?: boolean;
-  busy: string | null;
-  running: boolean;
-  onEvaluate: () => void;
-  onUse: () => void;
-  onApply?: () => void;
+  onClick: () => void;
+  disabled?: boolean;
+  icon?: React.ReactNode;
 }) {
-  const disabled = busy !== null || running;
-  const evaluatingThis = busy === entry.model;
   return (
-    <div
-      className={`flex flex-wrap items-center gap-3 rounded-card border px-3 py-2.5 ${
-        entry.is_best
-          ? "border-success/30 bg-success/5"
-          : active
-            ? "border-primary/30 bg-primary/5"
-            : "border-white/5 bg-white/[0.02]"
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={`inline-flex items-center gap-1.5 rounded-control px-3 py-1.5 text-xs font-medium ring-1 ring-inset transition disabled:cursor-not-allowed disabled:opacity-40 ${
+        active
+          ? "bg-primary/20 text-primary-bright ring-primary/40"
+          : "bg-white/5 text-text-secondary ring-white/10 hover:bg-white/10"
       }`}
     >
-      <span className="w-6 text-center text-sm font-semibold text-text-muted">
-        {unevaluated ? "—" : rank}
-      </span>
-      <div className="min-w-[8rem]">
-        <span className="flex items-center gap-1.5 font-medium text-text-primary">
-          {entry.is_best && <Trophy className="h-3.5 w-3.5 text-success" />}
-          {entry.model}
-        </span>
-        <div className="mt-0.5 flex gap-1">
-          {active && <Badge tone="primary">live</Badge>}
-          {entry.is_best && <Badge tone="success">best</Badge>}
-        </div>
-      </div>
+      {icon}
+      {children}
+    </button>
+  );
+}
 
-      {unevaluated ? (
-        <span className="text-sm text-text-muted">Not evaluated yet</span>
-      ) : (
-        <div className="flex flex-1 flex-wrap gap-x-6 gap-y-1 text-sm">
-          <Stat label="AUC" value={fix(4)(entry.auc)} strong />
-          <Stat label="EER" value={pctOf(entry.eer)} />
-          <Stat label="thr" value={fix(3)(entry.best_threshold)} />
-          <Stat label="ms/face" value={fix(2)(entry.embed_ms_mean)} />
-          <Stat label="cov" value={pctOf(entry.coverage)} />
-        </div>
-      )}
+function Dropzone({
+  file,
+  onFile,
+  disabled,
+}: {
+  file: File | null;
+  onFile: (f: File | null) => void;
+  disabled?: boolean;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
 
-      <div className="ml-auto flex flex-wrap items-center gap-2">
-        <Button size="sm" variant="ghost" disabled={disabled} onClick={onEvaluate}>
-          {evaluatingThis ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Activity className="h-3.5 w-3.5" />
-          )}
-          Evaluate
-        </Button>
-        {!unevaluated && onApply && (
-          <Button size="sm" variant="ghost" disabled={disabled} onClick={onApply}>
-            <Gauge className="h-3.5 w-3.5" /> Apply thr
-          </Button>
+  return (
+    <div>
+      <Label>Video clip</Label>
+      <div
+        onClick={() => !disabled && inputRef.current?.click()}
+        onDragOver={(e) => {
+          e.preventDefault();
+          if (!disabled) setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragging(false);
+          if (disabled) return;
+          const f = e.dataTransfer.files?.[0];
+          if (f) onFile(f);
+        }}
+        className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-card border-2 border-dashed p-6 text-center transition ${
+          dragging
+            ? "border-primary bg-primary/5"
+            : file
+              ? "border-success/40 bg-success/5"
+              : "border-white/15 hover:border-white/30"
+        } ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
+      >
+        <FileVideo className={`h-7 w-7 ${file ? "text-success" : "text-text-muted"}`} />
+        {file ? (
+          <div>
+            <p className="text-sm font-medium text-text-primary">{file.name}</p>
+            <p className="text-[11px] text-text-muted">
+              {(file.size / (1024 * 1024)).toFixed(1)} MB · click to replace
+            </p>
+          </div>
+        ) : (
+          <div>
+            <p className="text-sm text-text-secondary">
+              Drop a video here or click to browse
+            </p>
+            <p className="text-[11px] text-text-muted">mp4 · mov · avi · mkv</p>
+          </div>
         )}
-        {!active && (
-          <Button size="sm" disabled={disabled} onClick={onUse}>
-            Use
-          </Button>
-        )}
+        <input
+          ref={inputRef}
+          type="file"
+          accept="video/*"
+          className="hidden"
+          onChange={(e) => onFile(e.target.files?.[0] ?? null)}
+        />
       </div>
     </div>
   );
 }
 
-function Stat({
-  label,
-  value,
-  strong = false,
-}: {
-  label: string;
-  value: string;
-  strong?: boolean;
-}) {
+function ReportMeta({ report }: { report: VideoBenchmarkReport }) {
+  const m = report.meta;
   return (
-    <span className="tnum">
-      <span className="text-[11px] text-text-muted">{label} </span>
-      <span className={strong ? "font-semibold text-text-primary" : "text-text-secondary"}>
-        {value}
-      </span>
+    <Card padding="sm">
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-text-secondary">
+        <span className="flex items-center gap-1.5 font-medium text-text-primary">
+          <FileVideo className="h-3.5 w-3.5 text-primary-bright" />
+          {m.video}
+        </span>
+        <Meta label="Frames" value={`${m.frames_sampled} (stride ${m.frame_stride})`} />
+        <Meta label="Resolution" value={m.resolution} />
+        <Meta label="Duration" value={`${m.duration_s}s`} />
+        <Meta label="Devices" value={m.devices.map((d) => d.toUpperCase()).join(" + ")} />
+        {m.gpu_name && <Meta label="GPU" value={shortGpu(m.gpu_name)} />}
+      </div>
+    </Card>
+  );
+}
+
+function Meta({ label, value }: { label: string; value: string }) {
+  return (
+    <span>
+      <span className="text-text-muted">{label}: </span>
+      <span className="text-text-secondary">{value}</span>
     </span>
   );
 }
 
-function RunBanner({ run }: { run: BenchmarkRunStatus }) {
+function ResultsTable<T extends { model: string; device: string; error?: string }>({
+  title,
+  icon,
+  rows,
+  cols,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  rows: T[];
+  cols: Col<T>[];
+}) {
+  const [sortKey, setSortKey] = useState<keyof T | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  // Best value per highlightable column (across rows without errors).
+  const bestByCol = useMemo(() => {
+    const out: Partial<Record<keyof T, number>> = {};
+    for (const c of cols) {
+      if (!c.best) continue;
+      const vals: number[] = [];
+      for (const r of rows) {
+        if (r.error) continue;
+        const v = r[c.key] as unknown;
+        if (typeof v === "number") vals.push(v);
+      }
+      if (vals.length) out[c.key] = c.best === "min" ? Math.min(...vals) : Math.max(...vals);
+    }
+    return out;
+  }, [rows, cols]);
+
+  const sorted = useMemo(() => {
+    if (!sortKey) return rows;
+    const copy = [...rows];
+    copy.sort((a, b) => {
+      const av = a[sortKey];
+      const bv = b[sortKey];
+      const an = typeof av === "number" ? av : -Infinity;
+      const bn = typeof bv === "number" ? bv : -Infinity;
+      return sortDir === "asc" ? an - bn : bn - an;
+    });
+    return copy;
+  }, [rows, sortKey, sortDir]);
+
+  function onSort(key: keyof T) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("desc");
+    }
+  }
+
+  return (
+    <Card padding="sm">
+      <CardTitle icon={icon}>{title}</CardTitle>
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr className="border-b border-white/10 text-left text-[11px] uppercase tracking-wide text-text-muted">
+              <th className="px-3 py-2 font-medium">Model</th>
+              <th className="px-3 py-2 font-medium">Device</th>
+              {cols.map((c) => (
+                <th
+                  key={String(c.key)}
+                  onClick={() => onSort(c.key)}
+                  title={c.hint}
+                  className="cursor-pointer select-none px-3 py-2 font-medium hover:text-text-secondary"
+                >
+                  {c.label}
+                  {sortKey === c.key && (sortDir === "asc" ? " ↑" : " ↓")}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((r, i) => (
+              <tr
+                key={`${r.model}-${r.device}-${i}`}
+                className="border-b border-white/5 last:border-0 hover:bg-white/[0.02]"
+              >
+                <td className="px-3 py-2 font-medium text-text-primary">{r.model}</td>
+                <td className="px-3 py-2">
+                  <Badge tone={r.device === "cuda" ? "accent" : "neutral"}>
+                    {r.device === "cuda" ? (
+                      <Server className="h-3 w-3" />
+                    ) : (
+                      <Cpu className="h-3 w-3" />
+                    )}
+                    {r.device.toUpperCase()}
+                  </Badge>
+                </td>
+                {r.error ? (
+                  <td colSpan={cols.length} className="px-3 py-2 text-danger">
+                    {r.error}
+                  </td>
+                ) : (
+                  cols.map((c) => {
+                    const v = r[c.key];
+                    const isBest =
+                      c.best &&
+                      typeof v === "number" &&
+                      bestByCol[c.key] !== undefined &&
+                      Math.abs(v - (bestByCol[c.key] as number)) < 1e-9;
+                    return (
+                      <td
+                        key={String(c.key)}
+                        className={`tnum px-3 py-2 ${
+                          isBest
+                            ? "font-semibold text-success-bright"
+                            : "text-text-secondary"
+                        }`}
+                      >
+                        {c.fmt(v)}
+                        {isBest && <Zap className="ml-1 inline h-3 w-3 text-success" />}
+                      </td>
+                    );
+                  })
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-3 flex items-center gap-1.5 text-[11px] text-text-muted">
+        <Gauge className="h-3 w-3" />
+        Click a column to sort. <Zap className="h-3 w-3 text-success" /> marks the
+        best value per metric.
+      </p>
+    </Card>
+  );
+}
+
+function RunBanner({ run }: { run: VideoBenchmarkRunStatus }) {
   const running = run.status === "running";
   const failed = run.status === "error";
-  const tone = running ? "primary" : failed ? "danger" : "success";
-  const Icon = running ? Loader2 : failed ? XCircle : CheckCircle2;
+  const Icon = running ? Loader2 : failed ? XCircle : Trophy;
   return (
     <div
       className={`rounded-card border p-4 ${
-        tone === "primary"
+        running
           ? "border-primary/25 bg-primary/10"
-          : tone === "danger"
+          : failed
             ? "border-danger/25 bg-danger/10"
             : "border-success/25 bg-success/10"
       }`}
     >
       <div className="flex items-center gap-2 text-sm font-medium">
-        <Icon className={`h-4 w-4 ${running ? "animate-spin text-primary" : failed ? "text-danger" : "text-success"}`} />
+        <Icon
+          className={`h-4 w-4 ${
+            running ? "animate-spin text-primary" : failed ? "text-danger" : "text-success"
+          }`}
+        />
         {running
-          ? `Evaluating ${run.models.join(", ")} (${run.align}, ${run.device})…`
+          ? `Benchmarking ${run.video ?? "video"} on ${run.devices
+              .map((d) => d.toUpperCase())
+              .join(" + ")}…`
           : failed
-            ? `Evaluation failed: ${run.error ?? "unknown error"}`
-            : `Evaluation complete — ${run.models.join(", ")} scored & stored.`}
+            ? `Benchmark failed: ${run.error ?? "unknown error"}`
+            : `Benchmark complete — ${run.video ?? "video"} scored & stored.`}
         <span className="ml-auto flex items-center gap-1 text-xs text-text-muted">
           <Cpu className="h-3 w-3" /> isolated subprocess · live model untouched
         </span>
       </div>
       {run.log.length > 0 && (
-        <pre className="mt-2 max-h-28 overflow-y-auto rounded bg-black/30 p-2 text-[11px] leading-relaxed text-text-muted">
-          {run.log.slice(-8).join("\n")}
+        <pre className="mt-2 max-h-40 overflow-y-auto rounded bg-black/30 p-2 text-[11px] leading-relaxed text-text-muted">
+          {run.log.slice(-14).join("\n")}
         </pre>
       )}
     </div>
