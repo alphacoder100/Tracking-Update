@@ -257,7 +257,7 @@ class Settings(BaseSettings):
     PER_PERSON_FACE_FALLBACK: bool = True
 
     # ── Upload limits (/api/detect) ──────────────────────────
-    VIDEO_MAX_SIZE_MB: int = 100
+    VIDEO_MAX_SIZE_MB: int = 150
     VIDEO_MAX_DURATION_SECONDS: int = 60
     # Frames sampled per second of an uploaded video.
     FRAMES_PER_SECOND: int = 1
