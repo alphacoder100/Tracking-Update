@@ -316,6 +316,7 @@ from app.api import (  # noqa: E402
     analytics,
     camera,
     detect,
+    perf,
     settings as settings_api,
     visitors,
     websocket,
@@ -329,6 +330,7 @@ app.include_router(camera.router)
 app.include_router(admin.router)
 app.include_router(admin_config.router)
 app.include_router(settings_api.router)
+app.include_router(perf.router)
 app.include_router(websocket.router)
 
 

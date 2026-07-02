@@ -16,6 +16,7 @@ import numpy as np
 from app.ml_models import ModelManager, FaceEmbeddingCache
 from app.config import settings
 from app.geometry import bbox_iou as _compute_iou
+from app.profiling import profiler
 from app.utils import normalize_embedding
 
 logger = logging.getLogger(__name__)
@@ -165,6 +166,7 @@ def refine_small_face(image: np.ndarray, face: dict) -> Optional[dict]:
 def process_frame(
     image: np.ndarray,
     embedding_cache: Optional[FaceEmbeddingCache] = None,
+    camera_id: Optional[str] = None,
 ) -> List[DetectedPerson]:
     """
     Full CV pipeline for one frame:
@@ -181,6 +183,7 @@ def process_frame(
     _t_yolo = perf_counter()
     persons = model_mgr.detect_persons(image, confidence=settings.YOLO_PERSON_CONFIDENCE)
     yolo_secs = perf_counter() - _t_yolo
+    profiler.record("yolo", yolo_secs, camera_id)
     logger.debug("Detected %d person(s) in frame.", len(persons))
 
     # All faces in one pass; rescue small faces rather than dropping them.
@@ -196,6 +199,7 @@ def process_frame(
                 gated_faces.append(refined)
     frame_faces = gated_faces
     face_secs = perf_counter() - _t_face
+    profiler.record("arcface", face_secs, camera_id)
 
     # Nothing to attribute identity to and no bodies to embed → skip the rest.
     if not persons and not frame_faces:
@@ -242,7 +246,9 @@ def process_frame(
         if face_data is None and settings.PER_PERSON_FACE_FALLBACK:
             _t_fb = perf_counter()
             face_data = model_mgr.extract_face_data(person_crop)
-            face_secs += perf_counter() - _t_fb
+            _fb_secs = perf_counter() - _t_fb
+            face_secs += _fb_secs
+            profiler.record("face_fallback", _fb_secs, camera_id)
             face_from_full_frame = False
             if face_data is not None and face_data["det_score"] < settings.MIN_FACE_DET_SCORE:
                 face_data = None

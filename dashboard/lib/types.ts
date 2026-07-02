@@ -314,6 +314,63 @@ export interface DeviceStatus {
   models_loaded: boolean;
 }
 
+// Performance / CPU-attribution (from GET /api/perf).
+export interface PerfStage {
+  stage: string;
+  label: string;
+  calls: number;
+  total_s: number;
+  avg_ms: number;
+  share_pct: number;
+  occupancy_pct: number;
+}
+
+export interface PerfCamera {
+  camera_id: string;
+  total_s: number;
+  occupancy_pct: number;
+  stages: PerfStage[];
+  is_running?: boolean;
+  source_kind?: string;
+  frames_processed?: number;
+  frames_skipped?: number;
+  uptime_seconds?: number;
+}
+
+export interface PerfSystem {
+  cpu_percent: number;
+  per_core: number[];
+  cpu_count_logical: number | null;
+  cpu_count_physical: number | null;
+  loadavg: number[] | null;
+  memory_percent: number;
+  memory_used_mb: number;
+  memory_total_mb: number;
+  process_cpu_percent: number | null;
+  process_rss_mb: number | null;
+  process_threads: number | null;
+}
+
+export interface PerfDevice {
+  device: string;
+  cuda_available: boolean;
+  on_cpu: boolean;
+  torch_threads: number | null;
+  omp_num_threads: string | null;
+  inference_workers: number;
+  inference_max_concurrency: number | null;
+  pipeline_parallel: boolean;
+}
+
+export interface PerfBreakdown {
+  system: PerfSystem;
+  device: PerfDevice;
+  elapsed_s: number;
+  grand_total_s: number;
+  overall: PerfStage[];
+  cameras: PerfCamera[];
+}
+
 // Detector / recognition model selection (from GET/POST /api/admin/models).
 export interface ModelStatus {
   yolo_model: string;

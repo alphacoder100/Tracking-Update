@@ -25,6 +25,7 @@ from app.cv_pipeline import process_frame
 from app.database import AsyncSessionLocal
 from app.ml_models import FaceEmbeddingCache
 from app.monitoring import record_frame_latency
+from app.profiling import profiler
 from app.services.detection_pipeline import process_detections
 from app.utils import (
     cap_frame_long_side,
@@ -266,6 +267,7 @@ class CameraService:
                     break
 
                 frame = cap_frame_long_side(frame)
+                profiler.record("capture", perf_counter() - loop_start, self.camera_id)
                 self._last_frame = frame
                 async with self._frame_cond:
                     self._latest_frame = frame
@@ -365,6 +367,7 @@ class CameraService:
                     encode_jpeg, out, settings.LIVE_FEED_JPEG_QUALITY
                 )
                 encode_secs = perf_counter() - encode_start
+                profiler.record("encode", encode_secs, self.camera_id)
                 logger.debug("Display encode timing: jpeg=%.3fs.", encode_secs)
                 async with self._display_cond:
                     self._last_jpeg = jpeg
@@ -406,7 +409,7 @@ class CameraService:
                 try:
                     infer_start = perf_counter()
                     detections = await run_inference(
-                        process_frame, infer_frame, embedding_cache
+                        process_frame, infer_frame, embedding_cache, self.camera_id
                     )
                     infer_secs = perf_counter() - infer_start
                 except Exception as exc:
@@ -500,6 +503,7 @@ class CameraService:
                         elif pd.visitor_id is not None:
                             self.stats["returning_visitors"] += 1
                 post_secs = perf_counter() - post_start
+                profiler.record("identity_db", post_secs, self.camera_id)
                 record_frame_latency(infer_secs + post_secs)
                 logger.debug(
                     "Frame timing: camera=%s inference=%.3fs post_db=%.3fs detections=%d.",
@@ -615,7 +619,7 @@ class CameraService:
                 try:
                     infer_start = perf_counter()
                     detections = await run_inference(
-                        process_frame, frame, embedding_cache
+                        process_frame, frame, embedding_cache, self.camera_id
                     )
                     infer_secs = perf_counter() - infer_start
                 except Exception as exc:
@@ -651,6 +655,7 @@ class CameraService:
                         elif pd.visitor_id is not None:
                             self.stats["returning_visitors"] += 1
                 post_secs = perf_counter() - post_start
+                profiler.record("identity_db", post_secs, self.camera_id)
                 record_frame_latency(infer_secs + post_secs)
                 logger.debug(
                     "Frame timing: camera=%s inference=%.3fs post_db=%.3fs detections=%d.",
