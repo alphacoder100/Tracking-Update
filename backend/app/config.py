@@ -174,6 +174,12 @@ class Settings(BaseSettings):
     # independent of how often detection runs, so the feed never freezes when
     # frame-dedup skips the (expensive) detection pass on near-identical frames.
     LIVE_PREVIEW_FPS: float = 15.0
+    # Stop drawing + JPEG-encoding preview frames when no client has requested
+    # one within this many seconds. Detection keeps running; only the (CPU-heavy)
+    # live-feed encoding pauses, so an unwatched camera costs almost no CPU for
+    # the preview. A viewer polling the snapshot / opening the stream resumes it.
+    # 0 disables the auto-idle (always encode, legacy behaviour).
+    LIVE_PREVIEW_IDLE_TIMEOUT: float = 2.0
 
     # ── Frame preprocessing ──────────────────────────────────
     # Downscale frames so the longest side is at most this many pixels before

@@ -166,6 +166,10 @@ async def camera_snapshot(
     _key: str = Security(verify_api_key),
 ):
     cam = CameraManager.get_instance().get(camera_id)
+    if cam is not None:
+        # Mark the feed as actively watched so the display loop keeps encoding
+        # preview frames. Without recent requests it auto-idles to save CPU.
+        await cam.note_view_request()
     jpeg = cam.snapshot_jpeg(annotated=annotated) if cam is not None else None
     if jpeg is None:
         raise HTTPException(status_code=404, detail="No frame available yet.")

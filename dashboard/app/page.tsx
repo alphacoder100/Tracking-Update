@@ -174,7 +174,7 @@ function ZoomModal({
             <X className="h-5 w-5" />
           </button>
         </div>
-        <DetectionFeed cameraId={cameraId} onStatus={setSt} pollMs={250} />
+        <DetectionFeed cameraId={cameraId} onStatus={setSt} pollMs={250} defaultStreaming />
         <div className="mt-3 grid grid-cols-3 gap-3">
           <MiniMetric label="Persons" value={st?.persons_detected ?? 0} />
           <MiniMetric label="New" value={st?.new_visitors ?? 0} />

@@ -97,6 +97,10 @@ class CameraService:
         self._annotations_id: int = 0      # frame id the overlays came from
         self._frame_cond: Optional[asyncio.Condition] = None
         self._display_cond: Optional[asyncio.Condition] = None
+        # perf_counter() of the most recent client frame request (snapshot poll
+        # or open MJPEG stream). The display loop only draws + encodes preview
+        # frames while this is fresh, so an unwatched camera skips that CPU cost.
+        self._last_view_request: float = 0.0
         self._results: Optional[asyncio.Queue] = None
         self._pipeline_tasks: list = []
         self.stats = {
@@ -196,6 +200,7 @@ class CameraService:
         self._annotations_id = 0
         self._frame_cond = asyncio.Condition()
         self._display_cond = asyncio.Condition()
+        self._last_view_request = 0.0
         self._results = None
         self._pipeline_tasks = []
 
@@ -288,15 +293,55 @@ class CameraService:
             self._claimed_id = self._latest_frame_id
             return self._latest_frame, self._claimed_id
 
+    async def note_view_request(self) -> None:
+        """Register that a client is actively watching the live feed.
+
+        Called by the snapshot / stream endpoints. Refreshes the keep-alive
+        timestamp and wakes the display loop so it resumes encoding preview
+        frames on demand. When no client calls this for
+        ``LIVE_PREVIEW_IDLE_TIMEOUT`` seconds, the display loop pauses its
+        (CPU-heavy) draw + JPEG encode until the next request.
+        """
+        self._last_view_request = perf_counter()
+        cond = self._display_cond
+        if cond is not None:
+            async with cond:
+                cond.notify_all()
+
+    def _preview_is_idle(self) -> bool:
+        """True when no client has requested a frame recently (nobody watching)."""
+        timeout = settings.LIVE_PREVIEW_IDLE_TIMEOUT
+        if timeout <= 0:
+            return False  # auto-idle disabled → always encode
+        return (perf_counter() - self._last_view_request) > timeout
+
     async def _display_loop(self) -> None:
         """Encode the latest captured frame at a steady preview rate, overlaying
         the most recent detection boxes. Runs independently of detection/dedup so
-        the live feed never freezes when detection is skipped."""
+        the live feed never freezes when detection is skipped.
+
+        Skips all draw + encode work while nobody is watching (see
+        ``note_view_request``), so an unwatched camera costs almost no CPU for
+        the preview while detection keeps running in the background."""
         preview_fps = settings.LIVE_PREVIEW_FPS
         interval = 1.0 / preview_fps if preview_fps > 0 else 0.0
         last_seen_id = 0
         try:
             while self.is_running:
+                # Pause preview encoding when no client is polling. Blocks here
+                # (no CPU) until note_view_request() wakes us with a fresh
+                # timestamp. Dropping the cached JPEG makes the next viewer get a
+                # current frame rather than a stale one from before the pause.
+                if self._preview_is_idle():
+                    async with self._display_cond:
+                        self._last_jpeg = None
+                        await self._display_cond.wait_for(
+                            lambda: not self.is_running or not self._preview_is_idle()
+                        )
+                    if not self.is_running:
+                        break
+                    continue
+
                 loop_start = perf_counter()
                 async with self._frame_cond:
                     await self._frame_cond.wait_for(
@@ -511,6 +556,8 @@ class CameraService:
         last_id = -1
         boundary = b"--frame\r\n"
         while self.is_running:
+            # Keep the display loop encoding while this stream stays open.
+            await self.note_view_request()
             async with self._display_cond:
                 await self._display_cond.wait_for(
                     lambda: not self.is_running
