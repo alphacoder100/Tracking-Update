@@ -52,8 +52,10 @@ def cap_frame_long_side(image: np.ndarray, max_side: Optional[int] = None) -> np
     if long_side <= max_side:
         return image
     scale = max_side / long_side
+    # INTER_LINEAR is several times faster than INTER_AREA with negligible
+    # quality loss for detection — this runs on every captured frame.
     return cv2.resize(
-        image, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA
+        image, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_LINEAR
     )
 
 

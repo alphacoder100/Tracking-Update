@@ -29,7 +29,8 @@ from typing import Optional
 # Human-readable labels + ordering for the known stages. Unknown stages still
 # get recorded (they just won't have a friendly label / fixed order).
 STAGE_LABELS: dict[str, str] = {
-    "capture": "Frame capture + resize",
+    "read": "Frame read (I/O wait)",
+    "capture": "Frame resize",
     "yolo": "YOLO person detection",
     "arcface": "ArcFace face recognition",
     "face_fallback": "Per-person face fallback",

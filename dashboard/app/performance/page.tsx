@@ -10,6 +10,8 @@ import {
   Image as ImageIcon,
   MemoryStick,
   RefreshCw,
+  Ruler,
+  Save,
   ScanFace,
   ServerCog,
   Users,
@@ -17,7 +19,7 @@ import {
 } from "lucide-react";
 
 import { api, fetcher } from "@/lib/api";
-import type { PerfBreakdown, PerfCamera, PerfStage } from "@/lib/types";
+import type { AdminSettings, PerfBreakdown, PerfCamera, PerfStage } from "@/lib/types";
 import { StatCard } from "@/components/stat-card";
 import {
   Badge,
@@ -26,6 +28,7 @@ import {
   CardTitle,
   EmptyState,
   ErrorState,
+  Input,
   PageHeader,
   Spinner,
   Toggle,
@@ -33,7 +36,8 @@ import {
 
 // One fixed color per pipeline stage (matches the design-system palette hexes).
 const STAGE_COLOR: Record<string, string> = {
-  capture: "#64748B", // slate — I/O
+  read: "#64748B", // slate — blocking frame read (I/O wait, not CPU)
+  capture: "#94A3B8", // light slate — frame resize (CPU)
   yolo: "#3B82F6", // blue — person detection
   arcface: "#8B5CF6", // violet — face recognition
   face_fallback: "#A78BFA", // light violet — extra face pass
@@ -163,6 +167,162 @@ function CameraCard({ cam }: { cam: PerfCamera }) {
             <span>
               Heaviest: <span className="text-text-secondary">{top.label}</span>
             </span>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// Long-side presets (px). Smaller = less resize + lighter YOLO/ArcFace, at some
+// cost to recall for small/distant faces. 960 matches the ArcFace detector size.
+const FRAME_SIZE_PRESETS = [640, 720, 960, 1280, 1600];
+
+/** Adjust the detection frame size + capture rate live. Both feed the "Frame
+ *  resize" / "Frame read" stages above — shrinking the frame is the main lever
+ *  for the capture cost (and speeds every downstream stage too). */
+function FrameSizeCard() {
+  const { data, error, mutate } = useSWR<AdminSettings>("admin/settings", fetcher);
+  const [longEdit, setLongEdit] = useState<number | null>(null);
+  const [fpsEdit, setFpsEdit] = useState<number | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const serverLong =
+    typeof data?.MAX_FRAME_LONG_SIDE === "number" ? data.MAX_FRAME_LONG_SIDE : undefined;
+  const serverFps =
+    typeof data?.CAPTURE_MAX_FPS === "number" ? data.CAPTURE_MAX_FPS : undefined;
+
+  // Backend too old / setting not exposed — hide rather than render a broken card.
+  if (error || (data && serverLong === undefined && serverFps === undefined)) {
+    return null;
+  }
+
+  const curLong = longEdit ?? serverLong ?? 960;
+  const curFps = fpsEdit ?? serverFps ?? 8;
+  const dirty =
+    (serverLong !== undefined && curLong !== serverLong) ||
+    (serverFps !== undefined && curFps !== serverFps);
+
+  async function save() {
+    setSaving(true);
+    try {
+      const updates: Record<string, number> = {};
+      if (serverLong !== undefined && curLong !== serverLong)
+        updates.MAX_FRAME_LONG_SIDE = curLong;
+      if (serverFps !== undefined && curFps !== serverFps)
+        updates.CAPTURE_MAX_FPS = curFps;
+      await api.patch("admin/settings", { updates });
+      await mutate();
+      setLongEdit(null);
+      setFpsEdit(null);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch (e) {
+      alert(`Save failed: ${(e as Error).message}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardTitle
+        icon={<Ruler className="h-4 w-4" />}
+        action={
+          <div className="flex items-center gap-2">
+            {dirty && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setLongEdit(null);
+                  setFpsEdit(null);
+                }}
+              >
+                Discard
+              </Button>
+            )}
+            <Button size="sm" onClick={save} disabled={!dirty || saving}>
+              <Save className="h-4 w-4" />
+              {saving ? "Saving…" : saved ? "Saved ✓" : "Save"}
+            </Button>
+          </div>
+        }
+      >
+        Frame size & capture rate
+      </CardTitle>
+
+      {!data ? (
+        <Spinner label="Loading current values…" />
+      ) : (
+        <div className="space-y-5">
+          {/* Detection frame size (long side) */}
+          {serverLong !== undefined && (
+            <div>
+              <div className="mb-2 flex items-baseline justify-between">
+                <label className="text-sm text-text-primary">
+                  Detection frame size (long side)
+                </label>
+                <span className="tnum text-xs text-text-muted">{curLong} px</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {FRAME_SIZE_PRESETS.map((px) => (
+                  <button
+                    key={px}
+                    onClick={() => setLongEdit(px)}
+                    className={`rounded-control px-3 py-1.5 text-xs font-medium ring-1 ring-inset transition ${
+                      curLong === px
+                        ? "bg-primary/20 text-primary ring-primary/40"
+                        : "bg-white/5 text-text-secondary ring-white/10 hover:bg-white/10"
+                    }`}
+                  >
+                    {px}
+                  </button>
+                ))}
+                <div className="w-24">
+                  <Input
+                    type="number"
+                    min={0}
+                    step={16}
+                    value={curLong}
+                    onChange={(v) => setLongEdit(Number(v))}
+                  />
+                </div>
+              </div>
+              <p className="mt-2 text-xs text-text-muted">
+                Frames are downscaled so the longest side is at most this many pixels
+                before inference. Smaller = cheaper resize and lighter YOLO/ArcFace;
+                larger keeps small/distant faces detectable. 0 disables the cap.
+                Applies immediately.
+              </p>
+            </div>
+          )}
+
+          {/* Capture rate cap */}
+          {serverFps !== undefined && (
+            <div className="border-t border-white/5 pt-4">
+              <div className="mb-2 flex items-baseline justify-between">
+                <label className="text-sm text-text-primary">Capture rate cap</label>
+                <span className="tnum text-xs text-text-muted">
+                  {curFps > 0 ? `${curFps} fps` : "uncapped"}
+                </span>
+              </div>
+              <div className="w-28">
+                <Input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={curFps}
+                  onChange={(v) => setFpsEdit(Number(v))}
+                />
+              </div>
+              <p className="mt-2 text-xs text-text-muted">
+                Caps how fast the capture loop grabs + resizes frames from a live
+                source, so the pipeline stops decoding frames it will drop. 0 =
+                uncapped. Takes effect on the next camera (re)start.
+              </p>
+            </div>
           )}
         </div>
       )}
@@ -334,6 +494,9 @@ export default function PerformancePage() {
               </>
             )}
           </Card>
+
+          {/* ── Adjust frame size + capture rate ── */}
+          <FrameSizeCard />
 
           {/* ── Per-core load ── */}
           <Card>

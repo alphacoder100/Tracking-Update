@@ -154,6 +154,25 @@ class CameraService:
             self.capture = None
             raise RuntimeError(f"Could not open camera source: {self.source}")
 
+        # For USB webcams, ask the driver for a smaller frame so less is decoded
+        # and the downstream resize is cheap/no-op. RTSP/file sources ignore this.
+        if isinstance(cap_source, int) and (
+            settings.WEBCAM_CAPTURE_WIDTH > 0 or settings.WEBCAM_CAPTURE_HEIGHT > 0
+        ):
+            try:
+                if settings.WEBCAM_CAPTURE_WIDTH > 0:
+                    await asyncio.to_thread(
+                        self.capture.set, cv2.CAP_PROP_FRAME_WIDTH,
+                        settings.WEBCAM_CAPTURE_WIDTH,
+                    )
+                if settings.WEBCAM_CAPTURE_HEIGHT > 0:
+                    await asyncio.to_thread(
+                        self.capture.set, cv2.CAP_PROP_FRAME_HEIGHT,
+                        settings.WEBCAM_CAPTURE_HEIGHT,
+                    )
+            except Exception:  # noqa: BLE001 — best-effort; driver may reject
+                logger.debug("Webcam capture resolution request not honoured.")
+
         self.is_running = True
         self.started_at = perf_counter()
         for k in self.stats:
@@ -250,12 +269,19 @@ class CameraService:
             except Exception:
                 native = 0.0
             throttle_fps = native if native > 1.0 else self.fps
+        elif throttle_fps <= 0 and settings.CAPTURE_MAX_FPS > 0:
+            # Live source (webcam/RTSP): pace grabs so we don't decode+resize
+            # frames the newest-wins pipeline will immediately drop.
+            throttle_fps = settings.CAPTURE_MAX_FPS
         interval = 1.0 / throttle_fps if throttle_fps > 0 else 0.0
 
         try:
             while self.is_running:
                 loop_start = perf_counter()
                 ret, frame = await asyncio.to_thread(self.capture.read)
+                # read() blocks until the next frame arrives — record it as I/O
+                # wait (offloaded to a thread, not CPU), separate from the resize.
+                profiler.record("read", perf_counter() - loop_start, self.camera_id)
                 if not ret or frame is None:
                     if isinstance(_parse_source(self.source), int) or str(self.source).startswith("rtsp"):
                         await asyncio.sleep(0.05)
@@ -266,8 +292,9 @@ class CameraService:
                     logger.info("Camera source ended.")
                     break
 
+                resize_start = perf_counter()
                 frame = cap_frame_long_side(frame)
-                profiler.record("capture", perf_counter() - loop_start, self.camera_id)
+                profiler.record("capture", perf_counter() - resize_start, self.camera_id)
                 self._last_frame = frame
                 async with self._frame_cond:
                     self._latest_frame = frame
@@ -589,6 +616,8 @@ class CameraService:
             while self.is_running:
                 loop_start = perf_counter()
                 ret, frame = await asyncio.to_thread(self.capture.read)
+                # read() blocks until the next frame — record as I/O wait, not CPU.
+                profiler.record("read", perf_counter() - loop_start, self.camera_id)
                 if not ret or frame is None:
                     # Files end; live cameras may hiccup — retry briefly.
                     if isinstance(_parse_source(self.source), int) or str(self.source).startswith("rtsp"):
@@ -604,7 +633,9 @@ class CameraService:
                     logger.info("Camera source ended.")
                     break
 
+                resize_start = perf_counter()
                 frame = cap_frame_long_side(frame)
+                profiler.record("capture", perf_counter() - resize_start, self.camera_id)
                 self._last_frame = frame
 
                 if settings.FRAME_DEDUP_ENABLED:

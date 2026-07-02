@@ -54,6 +54,12 @@ _PATCHABLE = {
     "YOLO_PERSON_CONFIDENCE",
     "MIN_FACE_DET_SCORE",
     "FACE_QUALITY_CUTOFF",
+    # ── Frame preprocessing / capture cost ──
+    # MAX_FRAME_LONG_SIDE applies live (read per-frame in cap_frame_long_side).
+    # CAPTURE_MAX_FPS is read when a capture loop starts, so a change takes
+    # effect on the next camera (re)start rather than mid-stream.
+    "MAX_FRAME_LONG_SIDE",
+    "CAPTURE_MAX_FPS",
     # Max face embeddings kept per visitor. Higher = more multi-pose data per
     # person (better recall) + larger gallery; merges only trim faces ABOVE this.
     "MAX_FACES_PER_VISITOR",

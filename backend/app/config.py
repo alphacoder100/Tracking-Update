@@ -183,8 +183,9 @@ class Settings(BaseSettings):
 
     # ── Frame preprocessing ──────────────────────────────────
     # Downscale frames so the longest side is at most this many pixels before
-    # inference. 0 disables the cap.
-    MAX_FRAME_LONG_SIDE: int = 1280
+    # inference. 0 disables the cap. 960 matches INSIGHTFACE_DET_SIZE so face
+    # recall is preserved while cutting resize + YOLO + ArcFace cost vs 1280.
+    MAX_FRAME_LONG_SIDE: int = 960
 
     # ── Frame de-duplication (video / camera) ────────────────
     # Skip the heavy YOLO+ArcFace pass on a frame near-identical to the previous
@@ -247,6 +248,19 @@ class Settings(BaseSettings):
     # GPU allows). For video files this also paces playback; live cameras are
     # naturally bounded by their own frame rate.
     PIPELINE_MAX_FPS: float = 0.0
+    # Cap on how fast the capture loop GRABS + resizes frames from a live source
+    # (webcam/RTSP), frames/sec. The newest-wins pipeline drops most frames, so
+    # decoding/resizing every one (30+ fps) is wasted CPU on frames that get
+    # thrown away. 8 fps is ample headroom above the inference rate. 0 = uncapped
+    # (grab every frame). Does not affect the live-preview rate (LIVE_PREVIEW_FPS)
+    # nor file playback pacing (those use PIPELINE_MAX_FPS / the file's own fps).
+    CAPTURE_MAX_FPS: float = 8.0
+    # Requested capture resolution for USB webcams (integer sources), width/height
+    # in px. Asks the driver to deliver smaller frames so less is decoded and the
+    # resize becomes cheap/no-op. 0 = leave the driver default. Ignored for RTSP
+    # (use the camera's low-res sub-stream URL instead) and file sources.
+    WEBCAM_CAPTURE_WIDTH: int = 0
+    WEBCAM_CAPTURE_HEIGHT: int = 0
 
     # ── Face quality gates (detection) ───────────────────────
     # Faces smaller than this (px, min of width/height) are ignored — too small
