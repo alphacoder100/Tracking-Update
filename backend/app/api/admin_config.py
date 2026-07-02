@@ -572,6 +572,7 @@ async def run_video_benchmark(
     recognition_models: str = Form(""),
     devices: str = Form("cpu"),
     max_frames: int = Form(150),
+    run_pipeline: bool = Form(True),
     _key: str = Security(verify_admin_api_key),
 ):
     """Upload a video and benchmark detection + recognition models on it."""
@@ -627,7 +628,7 @@ async def run_video_benchmark(
         raise HTTPException(status_code=500, detail=f"Could not save upload: {exc}")
 
     try:
-        await runner.start(path, det, rec, devs, max_frames=max_frames)
+        await runner.start(path, det, rec, devs, max_frames=max_frames, run_pipeline=run_pipeline)
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
     return runner.status()

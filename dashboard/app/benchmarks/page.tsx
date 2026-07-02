@@ -7,7 +7,9 @@ import {
   FileVideo,
   FlaskConical,
   Gauge,
+  Layers,
   Loader2,
+  MemoryStick,
   Play,
   ScanFace,
   Server,
@@ -24,6 +26,7 @@ import type {
   VideoBenchmarkReport,
   VideoBenchmarkRunStatus,
   VideoDetectionRow,
+  VideoPipelineRow,
   VideoRecognitionRow,
 } from "@/lib/types";
 import {
@@ -46,6 +49,9 @@ const num = (d: number) => (v: unknown) =>
 const pct = (v: unknown) => (typeof v === "number" ? `${(v * 100).toFixed(1)}%` : "—");
 const orNA = (v: unknown, d = 0) =>
   v === null || v === undefined ? "N/A" : typeof v === "number" ? v.toFixed(d) : String(v);
+// Real-time factor: throughput ÷ the source video's fps. ≥1× keeps up in real time.
+const rtFmt = (v: unknown) => (typeof v === "number" ? `${v.toFixed(2)}×` : "—");
+const str = (v: unknown) => (v === null || v === undefined ? "—" : String(v));
 
 type Dir = "min" | "max";
 type Col<T> = {
@@ -61,12 +67,21 @@ type Col<T> = {
 const DETECTION_COLS: Col<VideoDetectionRow>[] = [
   { key: "det_per_frame", label: "Det/frame", fmt: num(2) },
   { key: "mean_conf", label: "Conf", fmt: num(3), best: "max" },
-  { key: "ms_mean", label: "ms/frame", fmt: num(1), best: "min" },
   { key: "fps", label: "FPS", fmt: num(1), best: "max" },
+  { key: "rt_factor", label: "Real-time", fmt: rtFmt, best: "max", hint: "throughput ÷ video fps · ≥1× keeps up in real time" },
+  { key: "ms_mean", label: "ms mean", fmt: num(1), best: "min" },
+  { key: "ms_p95", label: "ms p95", fmt: num(1), best: "min", hint: "95th-percentile per-frame latency (tail, not average)" },
+  { key: "ms_p99", label: "ms p99", fmt: num(1), best: "min", hint: "99th-percentile per-frame latency (worst-case stalls)" },
+  { key: "ms_max", label: "ms max", fmt: num(1), best: "min", hint: "slowest single frame" },
+  { key: "load_ms", label: "Load ms", fmt: num(0), best: "min", hint: "cold-start: model load + first warmup inference" },
   { key: "cpu_pct_mean", label: "CPU%", fmt: num(0) },
+  { key: "cpu_pct_peak", label: "CPU% pk", fmt: num(0), hint: "peak CPU during the run" },
   { key: "ram_mb_mean", label: "RAM MB", fmt: num(0) },
+  { key: "ram_mb_peak", label: "RAM pk", fmt: num(0), hint: "peak RAM during the run" },
   { key: "gpu_pct_mean", label: "GPU%", fmt: (v) => orNA(v, 0) },
+  { key: "gpu_pct_peak", label: "GPU% pk", fmt: (v) => orNA(v, 0) },
   { key: "vram_mb_mean", label: "VRAM MB", fmt: (v) => orNA(v, 0) },
+  { key: "vram_mb_peak", label: "VRAM pk", fmt: (v) => orNA(v, 0) },
 ];
 
 const RECOGNITION_COLS: Col<VideoRecognitionRow>[] = [
@@ -75,12 +90,40 @@ const RECOGNITION_COLS: Col<VideoRecognitionRow>[] = [
   { key: "inter_sim", label: "Inter sim", fmt: num(3), best: "min", hint: "different-person similarity (lower better)" },
   { key: "dup_rate", label: "Dup rate", fmt: pct, best: "min", hint: "different people falsely too-similar (lower better)" },
   { key: "tracks", label: "Tracks", fmt: num(0) },
-  { key: "ms_mean", label: "ms/face", fmt: num(1), best: "min" },
   { key: "fps", label: "FPS", fmt: num(1), best: "max" },
+  { key: "rt_factor", label: "Real-time", fmt: rtFmt, best: "max", hint: "embeddings/s ÷ the face rate the footage produces · ≥1× keeps up" },
+  { key: "ms_mean", label: "ms mean", fmt: num(1), best: "min" },
+  { key: "ms_p95", label: "ms p95", fmt: num(1), best: "min", hint: "95th-percentile per-face latency" },
+  { key: "ms_p99", label: "ms p99", fmt: num(1), best: "min", hint: "99th-percentile per-face latency" },
+  { key: "load_ms", label: "Load ms", fmt: num(0), best: "min", hint: "cold-start: model load time" },
   { key: "cpu_pct_mean", label: "CPU%", fmt: num(0) },
+  { key: "cpu_pct_peak", label: "CPU% pk", fmt: num(0) },
   { key: "ram_mb_mean", label: "RAM MB", fmt: num(0) },
+  { key: "ram_mb_peak", label: "RAM pk", fmt: num(0) },
   { key: "gpu_pct_mean", label: "GPU%", fmt: (v) => orNA(v, 0) },
+  { key: "gpu_pct_peak", label: "GPU% pk", fmt: (v) => orNA(v, 0) },
   { key: "vram_mb_mean", label: "VRAM MB", fmt: (v) => orNA(v, 0) },
+  { key: "vram_mb_peak", label: "VRAM pk", fmt: (v) => orNA(v, 0) },
+];
+
+// Full end-to-end (person-detect + face-detect + recognize) pairing table.
+const PIPELINE_COLS: Col<VideoPipelineRow>[] = [
+  { key: "recognition", label: "Recognition", fmt: str },
+  { key: "fps", label: "FPS", fmt: num(1), best: "max", hint: "end-to-end frames/second for the whole pairing" },
+  { key: "rt_factor", label: "Real-time", fmt: rtFmt, best: "max", hint: "end-to-end throughput ÷ video fps · ≥1× keeps up" },
+  { key: "ms_mean", label: "ms/frame", fmt: num(1), best: "min" },
+  { key: "ms_p95", label: "ms p95", fmt: num(1), best: "min" },
+  { key: "ms_p99", label: "ms p99", fmt: num(1), best: "min" },
+  { key: "persons", label: "Persons", fmt: num(0) },
+  { key: "faces", label: "Faces", fmt: num(0) },
+  { key: "cpu_pct_mean", label: "CPU%", fmt: num(0) },
+  { key: "cpu_pct_peak", label: "CPU% pk", fmt: num(0) },
+  { key: "ram_mb_mean", label: "RAM MB", fmt: num(0) },
+  { key: "ram_mb_peak", label: "RAM pk", fmt: num(0) },
+  { key: "gpu_pct_mean", label: "GPU%", fmt: (v) => orNA(v, 0) },
+  { key: "gpu_pct_peak", label: "GPU% pk", fmt: (v) => orNA(v, 0) },
+  { key: "vram_mb_mean", label: "VRAM MB", fmt: (v) => orNA(v, 0) },
+  { key: "vram_mb_peak", label: "VRAM pk", fmt: (v) => orNA(v, 0) },
 ];
 
 export default function BenchmarkPage() {
@@ -97,6 +140,7 @@ export default function BenchmarkPage() {
   const [recModels, setRecModels] = useState<string[]>([]);
   const [devices, setDevices] = useState<string[]>(["cpu"]);
   const [maxFrames, setMaxFrames] = useState(120);
+  const [pipeline, setPipeline] = useState(true);
   const [uploading, setUploading] = useState(false);
 
   const running = run?.status === "running";
@@ -153,6 +197,7 @@ export default function BenchmarkPage() {
       form.append("recognition_models", recModels.join(","));
       form.append("devices", devices.join(","));
       form.append("max_frames", String(maxFrames));
+      form.append("run_pipeline", String(pipeline));
       await api.upload(RUN_KEY, form);
       await mutate(RUN_KEY);
     } catch (e) {
@@ -221,6 +266,23 @@ export default function BenchmarkPage() {
                   max={600}
                 />
               </div>
+
+              <div>
+                <Label>End-to-end pipeline</Label>
+                <Chip
+                  active={pipeline}
+                  onClick={() => setPipeline((p) => !p)}
+                  disabled={running}
+                  icon={<Layers className="h-3.5 w-3.5" />}
+                >
+                  Full detect → recognize combo
+                </Chip>
+                <p className="mt-1.5 text-[11px] text-text-muted">
+                  Measures each detection × recognition pairing running together
+                  (real ms/frame + combined cost). Adds a pass per pairing — turn
+                  off for a faster run.
+                </p>
+              </div>
             </div>
 
             {/* Right: model selection */}
@@ -287,6 +349,7 @@ export default function BenchmarkPage() {
       {report ? (
         <>
           <ReportMeta report={report} />
+          <SystemPanel report={report} />
           {report.detection.length > 0 && (
             <ResultsTable<VideoDetectionRow>
               title="Detection models"
@@ -301,6 +364,14 @@ export default function BenchmarkPage() {
               icon={<Trophy className="h-4 w-4" />}
               rows={report.recognition}
               cols={RECOGNITION_COLS}
+            />
+          )}
+          {report.pipeline && report.pipeline.length > 0 && (
+            <ResultsTable<VideoPipelineRow>
+              title="Full pipeline (detect → recognize)"
+              icon={<Layers className="h-4 w-4" />}
+              rows={report.pipeline}
+              cols={PIPELINE_COLS}
             />
           )}
         </>
@@ -456,6 +527,55 @@ function Meta({ label, value }: { label: string; value: string }) {
       <span className="text-text-muted">{label}: </span>
       <span className="text-text-secondary">{value}</span>
     </span>
+  );
+}
+
+function fmtGB(mb?: number | null): string {
+  return typeof mb === "number" ? `${(mb / 1024).toFixed(1)} GB` : "—";
+}
+
+// Machine capacity — the headroom the per-run CPU/GPU/RAM/VRAM costs are spent
+// against. Skipped for older reports saved before system info was captured.
+function SystemPanel({ report }: { report: VideoBenchmarkReport }) {
+  const s = report.meta.system;
+  if (!s) return null;
+  const cores =
+    s.cpu_cores_physical || s.cpu_cores_logical
+      ? `${s.cpu_cores_physical ?? "?"}C / ${s.cpu_cores_logical ?? "?"}T`
+      : "—";
+  return (
+    <Card padding="sm">
+      <CardTitle icon={<Gauge className="h-4 w-4" />}>Machine capacity</CardTitle>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <SysStat icon={<Cpu className="h-4 w-4" />} label="CPU" value={s.cpu_name ?? "—"} sub={cores} />
+        <SysStat icon={<MemoryStick className="h-4 w-4" />} label="RAM total" value={fmtGB(s.ram_total_mb)} />
+        <SysStat icon={<Server className="h-4 w-4" />} label="GPU" value={s.gpu_name ? shortGpu(s.gpu_name) : "None (CPU only)"} />
+        <SysStat icon={<Zap className="h-4 w-4" />} label="VRAM total" value={fmtGB(s.vram_total_mb)} />
+      </div>
+    </Card>
+  );
+}
+
+function SysStat({
+  icon,
+  label,
+  value,
+  sub,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  sub?: string;
+}) {
+  return (
+    <div className="flex items-start gap-2 rounded-card bg-white/[0.03] p-3 ring-1 ring-inset ring-white/5">
+      <span className="mt-0.5 text-text-muted">{icon}</span>
+      <div className="min-w-0">
+        <p className="text-[10px] font-medium uppercase tracking-wide text-text-muted">{label}</p>
+        <p className="truncate text-sm font-medium text-text-primary" title={value}>{value}</p>
+        {sub && <p className="text-[11px] text-text-secondary">{sub}</p>}
+      </div>
+    </div>
   );
 }
 

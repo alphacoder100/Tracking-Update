@@ -389,8 +389,30 @@ export interface VideoBenchmarkOptions {
   gpu_name: string | null;
 }
 
+// Per-call latency distribution (ms), shared by every video benchmark row.
+export interface LatencyStats {
+  ms_p50?: number;
+  ms_p95?: number;
+  ms_p99?: number;
+  ms_min?: number;
+  ms_max?: number;
+  ms_std?: number;
+}
+
+// Sampled resource cost (mean + peak), shared by every video benchmark row.
+export interface ResourceCost {
+  cpu_pct_mean?: number;
+  cpu_pct_peak?: number;
+  ram_mb_mean?: number;
+  ram_mb_peak?: number;
+  gpu_pct_mean?: number | null;
+  gpu_pct_peak?: number | null;
+  vram_mb_mean?: number | null;
+  vram_mb_peak?: number | null;
+}
+
 // One detection-model row in a video benchmark report.
-export interface VideoDetectionRow {
+export interface VideoDetectionRow extends LatencyStats, ResourceCost {
   model: string;
   device: string;
   frames?: number;
@@ -399,25 +421,23 @@ export interface VideoDetectionRow {
   mean_conf?: number;
   ms_mean?: number;
   fps?: number;
-  cpu_pct_mean?: number;
-  cpu_pct_peak?: number;
-  ram_mb_mean?: number;
-  ram_mb_peak?: number;
-  gpu_pct_mean?: number | null;
-  gpu_pct_peak?: number | null;
-  vram_mb_mean?: number | null;
-  vram_mb_peak?: number | null;
+  load_ms?: number;
+  rt_factor?: number | null;
+  realtime?: boolean;
   error?: string;
 }
 
 // One recognition-model row in a video benchmark report.
-export interface VideoRecognitionRow {
+export interface VideoRecognitionRow extends LatencyStats, ResourceCost {
   model: string;
   device: string;
   faces?: number;
   dim?: number;
   ms_mean?: number;
   fps?: number;
+  load_ms?: number;
+  rt_factor?: number | null;
+  realtime?: boolean;
   tracks?: number;
   tracks_multi?: number;
   intra_sim?: number;
@@ -426,15 +446,32 @@ export interface VideoRecognitionRow {
   dup_rate?: number;
   genuine_pairs?: number;
   impostor_pairs?: number;
-  cpu_pct_mean?: number;
-  cpu_pct_peak?: number;
-  ram_mb_mean?: number;
-  ram_mb_peak?: number;
-  gpu_pct_mean?: number | null;
-  gpu_pct_peak?: number | null;
-  vram_mb_mean?: number | null;
-  vram_mb_peak?: number | null;
   error?: string;
+}
+
+// One (detection × recognition) end-to-end pairing in a video benchmark report.
+export interface VideoPipelineRow extends LatencyStats, ResourceCost {
+  model: string; // detection weight
+  recognition: string; // recognition model
+  device: string;
+  frames?: number;
+  persons?: number;
+  faces?: number;
+  ms_mean?: number;
+  fps?: number;
+  rt_factor?: number | null;
+  realtime?: boolean;
+  error?: string;
+}
+
+// Static machine capacity the per-run costs are spent against.
+export interface BenchmarkSystemInfo {
+  cpu_name: string | null;
+  cpu_cores_physical: number | null;
+  cpu_cores_logical: number | null;
+  ram_total_mb: number | null;
+  gpu_name: string | null;
+  vram_total_mb: number | null;
 }
 
 export interface VideoBenchmarkReport {
@@ -451,11 +488,13 @@ export interface VideoBenchmarkReport {
     devices: string[];
     cpu_name: string | null;
     gpu_name: string | null;
+    system?: BenchmarkSystemInfo;
     conf: number;
     imgsz: number;
   };
   detection: VideoDetectionRow[];
   recognition: VideoRecognitionRow[];
+  pipeline?: VideoPipelineRow[];
 }
 
 // Live video-benchmark run status (from GET/POST /api/admin/benchmarks/video/run).

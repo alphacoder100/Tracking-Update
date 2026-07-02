@@ -33,7 +33,7 @@ import cv2
 import numpy as np
 
 from .common import Timer, l2_normalize, onnx_providers
-from .resources import ResourceSampler, cpu_name, gpu_name
+from .resources import ResourceSampler, cpu_name, gpu_name, system_info
 
 
 # ── Frame sampling ───────────────────────────────────────────
@@ -163,25 +163,37 @@ def detect_and_track(
 # ── Detection (YOLO) benchmark ───────────────────────────────
 
 
+def _rt_factor(model_fps: float, required_fps: float) -> Optional[float]:
+    """How many times real-time a stage runs: its throughput ÷ what the source
+    demands (≥1.0 keeps up). None when the demand is unknown (no source fps)."""
+    if not required_fps:
+        return None
+    return round(model_fps / required_fps, 2)
+
+
 def benchmark_detection(
     weights: List[str],
     frames: List[np.ndarray],
     device: str,
+    video_fps: float,
     conf: float = 0.25,
     imgsz: int = 640,
 ) -> List[dict]:
-    """Run each YOLO weight over the frames; record speed + resource cost."""
+    """Run each YOLO weight over the frames; record load/latency/speed + cost +
+    real-time factor (throughput vs the source video's own fps)."""
     from ultralytics import YOLO
 
     rows: List[dict] = []
     track_gpu = device == "cuda"
     for w in weights:
         print(f"\n▶ detection {w} on {device}")
+        load_t = Timer()
         try:
-            model = YOLO(w)
-            # Warmup
-            model.predict(frames[0], verbose=False, conf=conf, classes=[0],
-                          imgsz=imgsz, device=device)
+            with load_t.measure():
+                model = YOLO(w)
+                # Warmup (cold-start cost is part of load, not steady-state latency).
+                model.predict(frames[0], verbose=False, conf=conf, classes=[0],
+                              imgsz=imgsz, device=device)
         except Exception as exc:
             print(f"  [error] {w}: {exc}")
             rows.append({"model": w, "device": device, "error": str(exc)})
@@ -199,6 +211,7 @@ def benchmark_detection(
                     if r.boxes is not None and len(r.boxes) > 0:
                         n_det += len(r.boxes)
                         conf_sum += float(r.boxes.conf.cpu().numpy().sum())
+        rt = _rt_factor(timer.fps, video_fps)
         rows.append({
             "model": w,
             "device": device,
@@ -208,6 +221,10 @@ def benchmark_detection(
             "mean_conf": round(conf_sum / n_det, 3) if n_det else 0.0,
             "ms_mean": round(timer.mean_ms, 2),
             "fps": round(timer.fps, 1),
+            "load_ms": round(load_t.mean_ms, 1),
+            "rt_factor": rt,
+            "realtime": rt is not None and rt >= 1.0,
+            **timer.latency_stats(),
             **sampler.stats.as_dict(),
         })
         print(f"  {n_det} boxes · {timer.mean_ms:.1f} ms/frame · {timer.fps:.1f} FPS")
@@ -278,8 +295,12 @@ def benchmark_recognition(
     model_names: List[str],
     instances: List[FaceInstance],
     device: str,
+    video_fps: float,
+    n_frames: int,
 ) -> List[dict]:
-    """Embed the shared aligned crops with each model; score self-consistency."""
+    """Embed the shared aligned crops with each model; score self-consistency +
+    load/latency + a real-time factor. Recognition's real-time demand is the face
+    rate the footage produces: (faces ÷ frames) × video_fps embeddings per second."""
     from .recognition import _load_recognition_model
 
     if not instances:
@@ -288,12 +309,16 @@ def benchmark_recognition(
     crops = [inst.aligned for inst in instances]
     track_ids = np.array([inst.track_id for inst in instances])
     track_gpu = device == "cuda"
+    faces_per_frame = (len(crops) / n_frames) if n_frames else 0.0
+    required_face_fps = faces_per_frame * video_fps
 
     rows: List[dict] = []
     for name in model_names:
         print(f"\n▶ recognition {name} on {device}")
+        load_t = Timer()
         try:
-            model = _load_recognition_model(name, device)
+            with load_t.measure():
+                model = _load_recognition_model(name, device)
         except Exception as exc:
             print(f"  [error] {name}: {exc}")
             rows.append({"model": name, "device": device, "error": str(exc)})
@@ -309,6 +334,7 @@ def benchmark_recognition(
         emb_arr = l2_normalize(np.vstack(embeddings))
 
         consistency = _self_consistency(emb_arr, track_ids)
+        rt = _rt_factor(timer.fps, required_face_fps)
         rows.append({
             "model": name,
             "device": device,
@@ -316,6 +342,10 @@ def benchmark_recognition(
             "dim": int(emb_arr.shape[1]),
             "ms_mean": round(timer.mean_ms, 2),
             "fps": round(timer.fps, 1),
+            "load_ms": round(load_t.mean_ms, 1),
+            "rt_factor": rt,
+            "realtime": rt is not None and rt >= 1.0,
+            **timer.latency_stats(),
             **consistency,
             **sampler.stats.as_dict(),
         })
@@ -324,6 +354,110 @@ def benchmark_recognition(
             f"(intra={consistency['intra_sim']:.3f} inter={consistency['inter_sim']:.3f}) "
             f"dup={consistency['dup_rate']*100:.1f}% · {timer.mean_ms:.1f} ms/face"
         )
+    return rows
+
+
+# ── Full-pipeline combo benchmark ────────────────────────────
+
+
+def benchmark_pipeline(
+    detection_models: List[str],
+    recognition_models: List[str],
+    frames: List[np.ndarray],
+    device: str,
+    video_fps: float,
+    conf: float = 0.25,
+    imgsz: int = 640,
+) -> List[dict]:
+    """
+    End-to-end pass per (detection × recognition) pairing: for every frame, run
+    person detection (YOLO) + face detection/alignment (buffalo_l) + recognition
+    embedding, timed as ONE fused operation. Unlike the isolated stage tables, this
+    measures the real ms/frame, FPS, real-time factor and combined CPU/GPU cost of
+    running a full model pairing together.
+
+    Models are loaded per pairing and released after, so peak memory stays at one
+    pairing's worth even across a large grid. The shared face detector is loaded
+    once for the whole grid.
+    """
+    from insightface.app import FaceAnalysis
+    from insightface.utils import face_align
+    from ultralytics import YOLO
+
+    from .recognition import _load_recognition_model
+
+    track_gpu = device == "cuda"
+    rows: List[dict] = []
+
+    # Shared face detector (buffalo_l) — the pipeline's face stage, loaded once.
+    try:
+        face_app = FaceAnalysis(
+            name="buffalo_l",
+            providers=onnx_providers(device),
+            allowed_modules=["detection"],
+        )
+        face_app.prepare(ctx_id=0 if device == "cuda" else -1, det_size=(640, 640))
+    except Exception as exc:
+        return [{"model": "pipeline", "recognition": "—", "device": device,
+                 "error": f"face detector failed to load: {exc}"}]
+
+    for dw in detection_models:
+        try:
+            yolo = YOLO(dw)
+            yolo.predict(frames[0], verbose=False, conf=conf, classes=[0],
+                         imgsz=imgsz, device=device)
+        except Exception as exc:
+            rows.append({"model": dw, "recognition": "—", "device": device, "error": str(exc)})
+            continue
+
+        for rw in recognition_models:
+            print(f"\n▶ pipeline {dw} + {rw} on {device}")
+            try:
+                rec = _load_recognition_model(rw, device)
+            except Exception as exc:
+                print(f"  [error] {rw}: {exc}")
+                rows.append({"model": dw, "recognition": rw, "device": device, "error": str(exc)})
+                continue
+
+            timer = Timer()
+            n_persons = n_faces = 0
+            with ResourceSampler(track_gpu=track_gpu) as sampler:
+                for frame in frames:
+                    with timer.measure():
+                        det = yolo.predict(frame, verbose=False, conf=conf,
+                                           classes=[0], imgsz=imgsz, device=device)
+                        for r in det:
+                            if r.boxes is not None:
+                                n_persons += len(r.boxes)
+                        faces = face_app.get(frame)
+                        for f in faces:
+                            kps = getattr(f, "kps", None)
+                            if kps is None:
+                                continue
+                            aligned = face_align.norm_crop(frame, landmark=kps, image_size=112)
+                            rec.embed_resize(aligned)
+                            n_faces += 1
+            rt = _rt_factor(timer.fps, video_fps)
+            rows.append({
+                "model": dw,
+                "recognition": rw,
+                "device": device,
+                "frames": len(frames),
+                "persons": n_persons,
+                "faces": n_faces,
+                "ms_mean": round(timer.mean_ms, 2),
+                "fps": round(timer.fps, 1),
+                "rt_factor": rt,
+                "realtime": rt is not None and rt >= 1.0,
+                **timer.latency_stats(),
+                **sampler.stats.as_dict(),
+            })
+            # Release recognition model before the next pairing (bound peak memory).
+            del rec
+            print(
+                f"  {n_persons} persons · {n_faces} faces · "
+                f"{timer.mean_ms:.1f} ms/frame · {timer.fps:.1f} FPS"
+            )
     return rows
 
 
@@ -338,6 +472,7 @@ def run_video_benchmark(
     max_frames: int = 150,
     conf: float = 0.25,
     imgsz: int = 640,
+    run_pipeline: bool = True,
     progress=None,
 ) -> dict:
     """
@@ -358,6 +493,8 @@ def run_video_benchmark(
 
     detection_rows: List[dict] = []
     recognition_rows: List[dict] = []
+    pipeline_rows: List[dict] = []
+    do_pipeline = run_pipeline and bool(detection_models) and bool(recognition_models)
 
     for device in devices:
         log(f"\n=== Device: {device.upper()} ===")
@@ -366,7 +503,7 @@ def run_video_benchmark(
         if detection_models:
             log(f"Detection models on {device}: {', '.join(detection_models)}")
             detection_rows += benchmark_detection(
-                detection_models, vf.frames, device, conf=conf, imgsz=imgsz
+                detection_models, vf.frames, device, vf.fps, conf=conf, imgsz=imgsz
             )
 
         # Shared detect+track (once per device — detector runs on that device).
@@ -376,7 +513,16 @@ def run_video_benchmark(
             n_tracks = len({i.track_id for i in instances})
             log(f"{len(instances)} faces across {n_tracks} tracks")
             recognition_rows += benchmark_recognition(
-                recognition_models, instances, device
+                recognition_models, instances, device, vf.fps, len(vf.frames)
+            )
+
+        # Full end-to-end pipeline (detect + face-detect + recognize) per pairing.
+        if do_pipeline:
+            log(f"Full-pipeline combos on {device}: "
+                f"{len(detection_models)}×{len(recognition_models)} pairing(s) …")
+            pipeline_rows += benchmark_pipeline(
+                detection_models, recognition_models, vf.frames, device,
+                vf.fps, conf=conf, imgsz=imgsz
             )
 
     report = {
@@ -392,11 +538,13 @@ def run_video_benchmark(
             "devices": devices,
             "cpu_name": cpu_name(),
             "gpu_name": gpu_name(),
+            "system": system_info(),
             "conf": conf,
             "imgsz": imgsz,
         },
         "detection": detection_rows,
         "recognition": recognition_rows,
+        "pipeline": pipeline_rows,
     }
     log("\nVideo benchmark complete.")
     return report

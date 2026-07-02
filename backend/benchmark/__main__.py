@@ -134,6 +134,7 @@ def cmd_video(args: argparse.Namespace) -> int:
         max_frames=args.max_frames,
         conf=args.conf,
         imgsz=args.imgsz,
+        run_pipeline=not args.no_pipeline,
     )
 
     out_dir = Path(args.out)
@@ -298,6 +299,8 @@ def build_parser() -> argparse.ArgumentParser:
     v.add_argument("--max-frames", type=int, default=150, dest="max_frames")
     v.add_argument("--conf", type=float, default=0.25)
     v.add_argument("--imgsz", type=int, default=640)
+    v.add_argument("--no-pipeline", action="store_true", dest="no_pipeline",
+                   help="skip the end-to-end detect+recognize pipeline pass (faster)")
     v.add_argument("--out", default=str(DEFAULT_OUT_DIR))
     v.set_defaults(func=cmd_video)
 

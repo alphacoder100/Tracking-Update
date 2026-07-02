@@ -44,11 +44,16 @@ def onnx_providers(device: str) -> List[str]:
 
 
 class Timer:
-    """Accumulates wall-clock over many calls; reports total and per-call mean (ms)."""
+    """Accumulates per-call wall-clock (ms) over many calls.
+
+    Reports total, per-call mean and FPS (as before) plus the full latency
+    distribution — p50/p95/p99, min/max and std — so a stall a mean would hide is
+    visible. Keeps every sample; call counts here are bounded (frames/faces), so
+    the memory is negligible.
+    """
 
     def __init__(self) -> None:
-        self.total_s = 0.0
-        self.calls = 0
+        self.samples_ms: List[float] = []
 
     @contextmanager
     def measure(self) -> Iterator[None]:
@@ -56,16 +61,38 @@ class Timer:
         try:
             yield
         finally:
-            self.total_s += time.perf_counter() - t0
-            self.calls += 1
+            self.samples_ms.append((time.perf_counter() - t0) * 1000.0)
+
+    @property
+    def calls(self) -> int:
+        return len(self.samples_ms)
+
+    @property
+    def total_s(self) -> float:
+        return sum(self.samples_ms) / 1000.0
 
     @property
     def mean_ms(self) -> float:
-        return (self.total_s / self.calls * 1000.0) if self.calls else 0.0
+        return (sum(self.samples_ms) / len(self.samples_ms)) if self.samples_ms else 0.0
 
     @property
     def fps(self) -> float:
-        return (self.calls / self.total_s) if self.total_s > 0 else 0.0
+        total = self.total_s
+        return (self.calls / total) if total > 0 else 0.0
+
+    def latency_stats(self) -> dict:
+        """Per-call latency distribution in ms (empty-safe, all zeros if no calls)."""
+        if not self.samples_ms:
+            return {k: 0.0 for k in ("ms_p50", "ms_p95", "ms_p99", "ms_min", "ms_max", "ms_std")}
+        arr = np.asarray(self.samples_ms, dtype=np.float64)
+        return {
+            "ms_p50": round(float(np.percentile(arr, 50)), 2),
+            "ms_p95": round(float(np.percentile(arr, 95)), 2),
+            "ms_p99": round(float(np.percentile(arr, 99)), 2),
+            "ms_min": round(float(arr.min()), 2),
+            "ms_max": round(float(arr.max()), 2),
+            "ms_std": round(float(arr.std()), 2),
+        }
 
 
 def list_images(directory: Path) -> List[Path]:

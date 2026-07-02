@@ -64,6 +64,37 @@ def cpu_name() -> str:
     return proc or platform.machine() or "unknown CPU"
 
 
+def system_info() -> dict:
+    """Static capacity of the machine — the headroom the per-run costs are spent
+    against: CPU name + core counts, total RAM, GPU name + total VRAM. Every field
+    is best-effort and None when the relevant probe is unavailable."""
+    info: dict = {
+        "cpu_name": cpu_name(),
+        "cpu_cores_physical": None,
+        "cpu_cores_logical": None,
+        "ram_total_mb": None,
+        "gpu_name": gpu_name(),
+        "vram_total_mb": None,
+    }
+    try:
+        import psutil
+
+        info["cpu_cores_physical"] = psutil.cpu_count(logical=False)
+        info["cpu_cores_logical"] = psutil.cpu_count(logical=True)
+        info["ram_total_mb"] = round(psutil.virtual_memory().total / (1024 * 1024), 1)
+    except Exception:
+        pass
+    try:
+        import pynvml
+
+        pynvml.nvmlInit()
+        handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+        info["vram_total_mb"] = round(pynvml.nvmlDeviceGetMemoryInfo(handle).total / (1024 * 1024), 1)
+    except Exception:
+        pass
+    return info
+
+
 class ResourceSampler:
     """
     Context manager that samples CPU/RAM/GPU on a background thread.

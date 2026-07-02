@@ -74,6 +74,7 @@ class VideoBenchmarkRunner:
         recognition_models: List[str],
         devices: List[str],
         max_frames: int = 150,
+        run_pipeline: bool = True,
     ) -> None:
         if self.is_running:
             raise RuntimeError("A video benchmark run is already in progress.")
@@ -90,7 +91,8 @@ class VideoBenchmarkRunner:
             "error": None,
         }
         self._task = asyncio.create_task(
-            self._run(video_path, detection_models, recognition_models, devices, max_frames)
+            self._run(video_path, detection_models, recognition_models, devices,
+                      max_frames, run_pipeline)
         )
 
     async def _run(
@@ -100,6 +102,7 @@ class VideoBenchmarkRunner:
         recognition_models: List[str],
         devices: List[str],
         max_frames: int,
+        run_pipeline: bool = True,
     ) -> None:
         _BENCH_DIR.mkdir(parents=True, exist_ok=True)
         args = [
@@ -111,6 +114,8 @@ class VideoBenchmarkRunner:
             "--max-frames", str(max_frames),
             "--out", str(_BENCH_DIR),
         ]
+        if not run_pipeline:
+            args.append("--no-pipeline")
         started = time.time()
         logger.info("Video benchmark subprocess: %s", " ".join(args))
         try:
